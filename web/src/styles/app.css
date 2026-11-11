@@ -1,0 +1,33 @@
+@import 'tailwindcss';
+@import './tokens.css';
+/* The older shared classes (panels, tables, notes, forms) live in the components layer so utilities still win. */
+@import './legacy.css' layer(components);
+@import './motion.css' layer(components);
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-muted: var(--surface-muted);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-fg-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-text);
+  --color-focus: var(--focus);
+  --color-st-active: var(--status-active);
+  --color-st-active-soft: var(--status-active-soft);
+  --color-st-attention: var(--status-attention);
+  --color-st-attention-soft: var(--status-attention-soft);
+  --color-st-ok: var(--status-ok);
+  --color-st-ok-soft: var(--status-ok-soft);
+  --color-st-danger: var(--status-danger);
+  --color-st-danger-soft: var(--status-danger-soft);
+  --color-st-warning: var(--status-warning);
+  --color-st-warning-soft: var(--status-warning-soft);
+  --color-st-neutral: var(--status-neutral);
+  --color-st-neutral-soft: var(--status-neutral-soft);
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --radius-card: 10px;
+}

@@ -1,0 +1,41 @@
+/* Motion: transform and opacity, except the row flash (background colour), the hover colour transitions and the width of the chip bubble (a spring driven by script, not CSS).
+   Durations: page 120 ms, dialog and palette 160, dropdown and tooltip 100, tab underline 180, status pulse 1.6 s,
+   skeleton shimmer 1.4 s, row flash 600, toast 200 in and 150 out. Reduced motion turns all of it off. */
+@keyframes w-page { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes w-pop-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes w-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.98); } }
+@keyframes w-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes w-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes w-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.82); } }
+@keyframes w-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes w-toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes w-toast-out { from { opacity: 1; } to { opacity: 0; } }
+
+.page-in { animation: w-page 120ms ease-out; }
+.pop[data-state='open'] { animation: w-pop-in 160ms ease-out; }
+.pop[data-state='closed'] { animation: w-pop-out 120ms ease-in forwards; }
+.overlay[data-state='open'] { animation: w-fade-in 160ms ease-out; }
+.overlay[data-state='closed'] { animation: w-fade-out 120ms ease-in forwards; }
+.menu-pop[data-state='open'], .tip[data-state='delayed-open'], .tip[data-state='instant-open'] { animation: w-fade-in 100ms ease-out; }
+.menu-pop[data-state='closed'], .tip[data-state='closed'] { animation: w-fade-out 100ms ease-in forwards; }
+.pulse { animation: w-pulse 1.6s ease-in-out infinite; }
+.skeleton { position: relative; overflow: hidden; }
+.skeleton::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 70%, transparent), transparent); animation: w-shimmer 1.4s linear infinite; }
+/* A row changed by a live event flashes its background for 600 ms, then settles (the design's one exception to transform and opacity). */
+@keyframes w-flash-bg { from { background-color: var(--status-active-soft); } }
+tr.flash > td { animation: w-flash-bg 600ms ease-out; }
+.li-flash { animation: w-flash-bg 600ms ease-out; }
+.tab-line { transition: transform 180ms ease-out; transform-origin: left; }
+/* Toasts: square look (radius 4), Waves tokens, 200 ms in and 150 ms out. */
+[data-sonner-toaster] { --normal-bg: var(--surface); --normal-text: var(--text); --normal-border: var(--border); --border-radius: 4px;
+  --success-bg: var(--surface); --success-text: var(--text); --success-border: var(--border);
+  --error-bg: var(--surface); --error-text: var(--text); --error-border: var(--status-danger); font-family: inherit; }
+[data-sonner-toast] { transition-duration: 200ms !important; }
+[data-sonner-toast][data-removed='true'] { transition-duration: 150ms !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+.dots { display: inline-flex; gap: 4px; align-items: center; }
+.dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); animation: w-pulse 1.6s ease-in-out infinite; }
+.dots i:nth-child(2) { animation-delay: 0.2s; }
+.dots i:nth-child(3) { animation-delay: 0.4s; }

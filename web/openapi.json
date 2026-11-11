@@ -1,0 +1,4528 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Waves API",
+    "version": "1"
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "paths": {
+    "/approvals": {
+      "get": {
+        "summary": "Approval inbox",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractApprovalList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approvals/{id}": {
+      "get": {
+        "summary": "Approval detail",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractApprovalDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approvals/{id}/decision": {
+      "post": {
+        "summary": "Approve (human elevation) or reject",
+        "description": "Scope: human",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Waves-Elevation",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractApprovalDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit": {
+      "get": {
+        "summary": "Page through audit records",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractAuditList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit/acknowledge": {
+      "post": {
+        "summary": "Acknowledge a broken audit chain",
+        "description": "Scope: human",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractAuditStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/consume": {
+      "post": {
+        "summary": "Consume a login link and set the session cookie",
+        "description": "Scope: none",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractConsumeLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/link/{code}": {
+      "get": {
+        "summary": "Check a login link without consuming it",
+        "description": "Scope: none",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractLinkStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Revoke the session",
+        "description": "Scope: op",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "summary": "Scope, CSRF token, elevation state, expiry",
+        "description": "Scope: op",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/stepup": {
+      "post": {
+        "summary": "Passphrase step-up; returns an elevation",
+        "description": "Scope: op",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractStepUpRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractStepUpResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/stepup/revoke": {
+      "post": {
+        "summary": "Forget an elevation now (lock again)",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "X-Waves-Elevation",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/backup": {
+      "post": {
+        "summary": "Online database backup",
+        "description": "Scope: op",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractBackupResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "summary": "Server-sent events (one JSON payload per event name)",
+        "description": "Scope: op",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractEventPayloads"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/executions": {
+      "get": {
+        "summary": "Executions across projects",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractExecutionList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/executions/{id}": {
+      "get": {
+        "summary": "Execution detail",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractExecutionDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/executions/{id}/cancel": {
+      "post": {
+        "summary": "Interrupt: signal the process group",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractExecutionDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/executions/{id}/context": {
+      "get": {
+        "summary": "Delivered context package",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractContextPackage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/executions/{id}/diff": {
+      "get": {
+        "summary": "Stored unified diff",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/executions/{id}/log": {
+      "get": {
+        "summary": "Log bytes from an offset",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/executions/{id}/orphans/stop": {
+      "post": {
+        "summary": "Stop orphaned tool processes",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractExecutionDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/executions/{id}/resolve": {
+      "post": {
+        "summary": "Decide an interrupted or disconnected execution",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractExecutionDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses": {
+      "get": {
+        "summary": "Harnesses and capabilities",
+        "description": "Scope: op",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractHarnessList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Liveness and version",
+        "description": "Scope: none",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractHealthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/phases/{id}/reopen": {
+      "post": {
+        "summary": "Send finished tasks of a phase whose review was rejected back to work (needs a passphrase step-up; a window is enough)",
+        "description": "Scope: human",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Waves-Elevation",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractReopenTasksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/phases/{id}/review": {
+      "get": {
+        "summary": "Phase review package",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractPhaseReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/phases/{id}/validation-runs/{vid}/confirm": {
+      "post": {
+        "summary": "Confirm one checklist item (not an approval; needs a passphrase step-up, a window is enough)",
+        "description": "Scope: human",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Waves-Elevation",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractConfirmValidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractValidatorResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "summary": "List projects",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractProjectList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Register a project",
+        "description": "Scope: op",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractRegisterProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractProject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "summary": "Project overview",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractProjectDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/activate": {
+      "post": {
+        "summary": "Set the Active Context",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractProject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/agent/connect": {
+      "post": {
+        "summary": "Apply the reviewed connection plan",
+        "description": "Scope: human",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Waves-Elevation",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractConnectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractConnectPlan"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/agent/connect-plan": {
+      "get": {
+        "summary": "Dry run: the exact edits connecting would make",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractConnectPlan"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/agent/disconnect": {
+      "post": {
+        "summary": "Revert exactly the connection edits",
+        "description": "Scope: human",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Waves-Elevation",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractConnectPlan"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/guard": {
+      "get": {
+        "summary": "Guard policy and the not-defended statement",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractGuardInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/guard/decisions": {
+      "get": {
+        "summary": "Recent guard decisions",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractGuardDecisionList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/planning-requests": {
+      "post": {
+        "summary": "Create a planning request for a harness",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractPlanningRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/requirements": {
+      "get": {
+        "summary": "List requirement sources",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractRequirementList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a requirement source",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractAddRequirementRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractRequirement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/settings": {
+      "patch": {
+        "summary": "Guard policy and unmanaged-session rule",
+        "description": "Scope: human",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Waves-Elevation",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractPatchProjectSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractGuardInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/workflow": {
+      "get": {
+        "summary": "Workflow with its versions",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractWorkflowInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "summary": "Global settings",
+        "description": "Scope: op",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Change settings; security keys need an elevation",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "X-Waves-Elevation",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractPatchSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "summary": "Counts, audit chain status, needs-attention list",
+        "description": "Scope: op",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-versions/{id}": {
+      "get": {
+        "summary": "Phases, tasks, validators with exact commands",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractWorkflowVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-versions/{id}/submit": {
+      "post": {
+        "summary": "Submit a draft for approval",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractSubmitResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-versions/{id}/versions": {
+      "post": {
+        "summary": "New draft version",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractWorkflowVersionSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ContractAddRequirementRequest": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "file",
+              "text"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "ContractApprovalDetail": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "allowed_decisions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "category": {
+            "enum": [
+              "workflow",
+              "phase_start",
+              "phase_completion",
+              "task_execution",
+              "risky_action",
+              "result"
+            ],
+            "type": "string"
+          },
+          "category_label": {
+            "type": "string"
+          },
+          "commands": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/ContractApprovalFact"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "phase_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "reject_needs_stepup": {
+            "type": "boolean"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "step_up": {
+            "enum": [
+              "every_time",
+              "window_ok"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "subject_hash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "category_label",
+          "state",
+          "project_id",
+          "project_name",
+          "subject",
+          "requested_by",
+          "requested_at",
+          "action",
+          "facts",
+          "impact",
+          "commands",
+          "subject_hash",
+          "allowed_decisions",
+          "step_up",
+          "reject_needs_stepup"
+        ],
+        "type": "object"
+      },
+      "ContractApprovalFact": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "mono": {
+            "type": "boolean"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ContractApprovalList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContractApprovalSummary"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ContractApprovalSummary": {
+        "properties": {
+          "category": {
+            "enum": [
+              "workflow",
+              "phase_start",
+              "phase_completion",
+              "task_execution",
+              "risky_action",
+              "result"
+            ],
+            "type": "string"
+          },
+          "category_label": {
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "category_label",
+          "state",
+          "project_id",
+          "project_name",
+          "subject",
+          "requested_by",
+          "requested_at"
+        ],
+        "type": "object"
+      },
+      "ContractAttentionItem": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "approval",
+              "execution_failed",
+              "execution_disconnected",
+              "task_blocked",
+              "audit_chain",
+              "stepup_failures",
+              "passphrase_reset",
+              "database_restored",
+              "bypass_attempt"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "ref_id": {
+            "type": "string"
+          },
+          "ref_type": {
+            "enum": [
+              "approval",
+              "execution",
+              "audit"
+            ],
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "subject",
+          "since",
+          "ref_type",
+          "ref_id"
+        ],
+        "type": "object"
+      },
+      "ContractAuditList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContractAuditRecord"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ContractAuditStatus"
+          }
+        },
+        "required": [
+          "items",
+          "status"
+        ],
+        "type": "object"
+      },
+      "ContractAuditRecord": {
+        "properties": {
+          "actor_scope": {
+            "enum": [
+              "system",
+              "operator",
+              "human",
+              "guard",
+              "agent",
+              "local_offline"
+            ],
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "at",
+          "event",
+          "actor_scope",
+          "subject",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "ContractAuditStatus": {
+        "properties": {
+          "broken_at_record": {
+            "type": "integer"
+          },
+          "last_check_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_checkpoint_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "records": {
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "verified",
+              "broken"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "records",
+          "last_check_at"
+        ],
+        "type": "object"
+      },
+      "ContractBackupResult": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "at",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "ContractCapability": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "value": {
+            "enum": [
+              "supported",
+              "partial",
+              "unsupported",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value",
+          "note"
+        ],
+        "type": "object"
+      },
+      "ContractConfirmValidationRequest": {
+        "properties": {
+          "index": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index"
+        ],
+        "type": "object"
+      },
+      "ContractConnectPlan": {
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          },
+          "file": {
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "plan_hash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_hash",
+          "file",
+          "lines",
+          "applied"
+        ],
+        "type": "object"
+      },
+      "ContractConnectRequest": {
+        "properties": {
+          "plan_hash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_hash"
+        ],
+        "type": "object"
+      },
+      "ContractConsumeLinkRequest": {
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "ContractContextPackage": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/ContractContextSection"
+            },
+            "type": "array"
+          },
+          "size_bytes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "generated_at",
+          "size_bytes",
+          "sections"
+        ],
+        "type": "object"
+      },
+      "ContractContextSection": {
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "content"
+        ],
+        "type": "object"
+      },
+      "ContractCounts": {
+        "properties": {
+          "disconnected": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "queued": {
+            "type": "integer"
+          },
+          "running": {
+            "type": "integer"
+          },
+          "waiting_approval": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "running",
+          "queued",
+          "waiting_approval",
+          "failed",
+          "disconnected"
+        ],
+        "type": "object"
+      },
+      "ContractDecisionRequest": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "type": "string"
+          },
+          "feedback": {
+            "type": "string"
+          },
+          "override_reason": {
+            "type": "string"
+          },
+          "subject_hash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "subject_hash"
+        ],
+        "type": "object"
+      },
+      "ContractDiffSummary": {
+        "properties": {
+          "added": {
+            "type": "integer"
+          },
+          "executions": {
+            "type": "integer"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "removed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "files",
+          "added",
+          "removed",
+          "executions"
+        ],
+        "type": "object"
+      },
+      "ContractElevation": {
+        "properties": {
+          "approval_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "window",
+              "single_use"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "ContractErrorBody": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ContractErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "ContractErrorDetail": {
+        "properties": {
+          "attempts_left": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "next_step": {
+            "type": "string"
+          },
+          "record": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "retry_after_s": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ContractEventApprovalChanged": {
+        "properties": {
+          "approval_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "project_id",
+          "category",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContractEventAttentionChanged": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "type": "object"
+      },
+      "ContractEventAuditAlert": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "chain_broken",
+              "stepup_failures",
+              "bypass_attempt"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "ContractEventExecutionChanged": {
+        "properties": {
+          "execution_id": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "execution_id",
+          "task_id",
+          "project_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "ContractEventExecutionLog": {
+        "properties": {
+          "execution_id": {
+            "type": "string"
+          },
+          "offset": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "execution_id",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "ContractEventGuardDenial": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "would_deny": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "would_deny"
+        ],
+        "type": "object"
+      },
+      "ContractEventHarnessChanged": {
+        "properties": {
+          "harness_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "harness_id"
+        ],
+        "type": "object"
+      },
+      "ContractEventHello": {
+        "properties": {
+          "audit_ok": {
+            "type": "boolean"
+          },
+          "server_version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_version",
+          "audit_ok"
+        ],
+        "type": "object"
+      },
+      "ContractEventPayloads": {
+        "properties": {
+          "approval.changed": {
+            "$ref": "#/components/schemas/ContractEventApprovalChanged"
+          },
+          "attention.changed": {
+            "$ref": "#/components/schemas/ContractEventAttentionChanged"
+          },
+          "audit.alert": {
+            "$ref": "#/components/schemas/ContractEventAuditAlert"
+          },
+          "execution.changed": {
+            "$ref": "#/components/schemas/ContractEventExecutionChanged"
+          },
+          "execution.log": {
+            "$ref": "#/components/schemas/ContractEventExecutionLog"
+          },
+          "guard.denial": {
+            "$ref": "#/components/schemas/ContractEventGuardDenial"
+          },
+          "harness.changed": {
+            "$ref": "#/components/schemas/ContractEventHarnessChanged"
+          },
+          "hello": {
+            "$ref": "#/components/schemas/ContractEventHello"
+          },
+          "phase.changed": {
+            "$ref": "#/components/schemas/ContractEventPhaseChanged"
+          },
+          "project.changed": {
+            "$ref": "#/components/schemas/ContractEventProjectChanged"
+          },
+          "reset": {
+            "$ref": "#/components/schemas/ContractEventReset"
+          },
+          "task.changed": {
+            "$ref": "#/components/schemas/ContractEventTaskChanged"
+          },
+          "workflow.changed": {
+            "$ref": "#/components/schemas/ContractEventWorkflowChanged"
+          }
+        },
+        "required": [
+          "hello",
+          "reset",
+          "project.changed",
+          "workflow.changed",
+          "phase.changed",
+          "task.changed",
+          "execution.changed",
+          "execution.log",
+          "approval.changed",
+          "attention.changed",
+          "harness.changed",
+          "guard.denial",
+          "audit.alert"
+        ],
+        "type": "object"
+      },
+      "ContractEventPhaseChanged": {
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "phase_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase_id",
+          "project_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "ContractEventProjectChanged": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "ContractEventReset": {
+        "type": "object"
+      },
+      "ContractEventTaskChanged": {
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "phase_id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "phase_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "ContractEventWorkflowChanged": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "version_id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContractExecutionDetail": {
+        "properties": {
+          "diff_files": {
+            "type": "integer"
+          },
+          "duration_s": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "error": {
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ContractExecutionEvent"
+            },
+            "type": "array"
+          },
+          "harness": {
+            "type": "string"
+          },
+          "harness_version": {
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/ContractStateChange"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lease": {
+            "$ref": "#/components/schemas/ContractLease"
+          },
+          "mode": {
+            "enum": [
+              "harness_driven",
+              "waves_driven"
+            ],
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "queued_reason": {
+            "type": "string"
+          },
+          "recovery": {
+            "$ref": "#/components/schemas/ContractRecovery"
+          },
+          "result": {
+            "type": "string"
+          },
+          "start_commit": {
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "starting",
+              "running",
+              "waiting_approval",
+              "paused",
+              "completed",
+              "failed",
+              "cancelled",
+              "interrupted",
+              "disconnected"
+            ],
+            "type": "string"
+          },
+          "state_detail": {
+            "type": "string"
+          },
+          "task_code": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "task_title": {
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/ContractUsage"
+          },
+          "workspace_locked": {
+            "type": "boolean"
+          },
+          "workspace_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "task_title",
+          "task_code",
+          "project_id",
+          "project_name",
+          "harness",
+          "mode",
+          "state",
+          "workspace_path",
+          "workspace_locked",
+          "history",
+          "events",
+          "diff_files"
+        ],
+        "type": "object"
+      },
+      "ContractExecutionEvent": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "kind",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ContractExecutionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContractExecutionSummary"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ContractExecutionSummary": {
+        "properties": {
+          "duration_s": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "harness": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "harness_driven",
+              "waves_driven"
+            ],
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "starting",
+              "running",
+              "waiting_approval",
+              "paused",
+              "completed",
+              "failed",
+              "cancelled",
+              "interrupted",
+              "disconnected"
+            ],
+            "type": "string"
+          },
+          "state_detail": {
+            "type": "string"
+          },
+          "task_code": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "task_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "task_title",
+          "task_code",
+          "project_id",
+          "project_name",
+          "harness",
+          "mode",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContractFinding": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "unattributed",
+              "out_of_scope"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "path",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "ContractGuardDecision": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "allow",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          },
+          "would_deny": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "at",
+          "tool",
+          "target",
+          "decision",
+          "would_deny",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ContractGuardDecisionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContractGuardDecision"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ContractGuardInfo": {
+        "properties": {
+          "drift": {
+            "type": "string"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "not_defended": {
+            "type": "string"
+          },
+          "policy": {
+            "enum": [
+              "off",
+              "audit",
+              "enforce"
+            ],
+            "type": "string"
+          },
+          "unmanaged_sessions": {
+            "enum": [
+              "allow",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "would_deny_24h": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policy",
+          "installed",
+          "would_deny_24h",
+          "not_defended",
+          "unmanaged_sessions"
+        ],
+        "type": "object"
+      },
+      "ContractHarness": {
+        "properties": {
+          "available_for_execution": {
+            "type": "boolean"
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/ContractCapability"
+            },
+            "type": "array"
+          },
+          "connected_projects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "installed",
+          "connected_projects",
+          "available_for_execution",
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "ContractHarnessBrief": {
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "credential_active": {
+            "type": "boolean"
+          },
+          "guard_policy": {
+            "enum": [
+              "off",
+              "audit",
+              "enforce"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "would_deny_24h": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "connected",
+          "guard_policy",
+          "would_deny_24h",
+          "credential_active"
+        ],
+        "type": "object"
+      },
+      "ContractHarnessList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContractHarness"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ContractHealthResponse": {
+        "properties": {
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "type": "object"
+      },
+      "ContractLease": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "heartbeat_interval_s": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "expires_at",
+          "heartbeat_interval_s"
+        ],
+        "type": "object"
+      },
+      "ContractLinkStatus": {
+        "properties": {
+          "expires_in_s": {
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "valid",
+              "invalid"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContractNextStep": {
+        "properties": {
+          "ref_id": {
+            "type": "string"
+          },
+          "ref_type": {
+            "enum": [
+              "approval",
+              "execution",
+              "audit"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "ContractOrphan": {
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "command"
+        ],
+        "type": "object"
+      },
+      "ContractPatchProjectSettingsRequest": {
+        "properties": {
+          "guard_policy": {
+            "enum": [
+              "off",
+              "audit",
+              "enforce"
+            ],
+            "type": "string"
+          },
+          "unmanaged_sessions": {
+            "enum": [
+              "allow",
+              "deny"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ContractPatchSettingsRequest": {
+        "properties": {
+          "elevation_window_min": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "heartbeat_interval_s": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "log_retention_days": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "max_concurrent": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ContractPhaseRef": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "planned",
+              "awaiting_approval",
+              "approved",
+              "ready_for_execution",
+              "in_progress",
+              "blocked",
+              "validation",
+              "awaiting_phase_review",
+              "completed",
+              "revision_required",
+              "failed",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "title",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContractPhaseReview": {
+        "properties": {
+          "approval_id": {
+            "type": "string"
+          },
+          "diff": {
+            "$ref": "#/components/schemas/ContractDiffSummary"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ContractFinding"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/ContractPhaseRef"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "requires_override_reason": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/ContractReviewTask"
+            },
+            "type": "array"
+          },
+          "validators": {
+            "items": {
+              "$ref": "#/components/schemas/ContractValidatorResult"
+            },
+            "type": "array"
+          },
+          "workflow_number": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "phase",
+          "project_id",
+          "project_name",
+          "workflow_number",
+          "generated_at",
+          "validators",
+          "tasks",
+          "findings",
+          "summary",
+          "diff",
+          "requires_override_reason"
+        ],
+        "type": "object"
+      },
+      "ContractPlanning": {
+        "properties": {
+          "latest_proposal": {
+            "$ref": "#/components/schemas/ContractProposal"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ContractPlanningRequest"
+          }
+        },
+        "type": "object"
+      },
+      "ContractPlanningRequest": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "waiting",
+              "fetched",
+              "submitted"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "ContractProject": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "active_phase": {
+            "$ref": "#/components/schemas/ContractPhaseRef"
+          },
+          "base_branch": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "failed_executions": {
+            "type": "integer"
+          },
+          "guard_policy": {
+            "enum": [
+              "off",
+              "audit",
+              "enforce"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_git": {
+            "type": "boolean"
+          },
+          "last_activity_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "pending_approvals": {
+            "type": "integer"
+          },
+          "progress_pct": {
+            "type": "integer"
+          },
+          "running_executions": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path",
+          "is_git",
+          "active",
+          "progress_pct",
+          "running_executions",
+          "failed_executions",
+          "pending_approvals",
+          "guard_policy"
+        ],
+        "type": "object"
+      },
+      "ContractProjectDetail": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "active_phase": {
+            "$ref": "#/components/schemas/ContractPhaseRef"
+          },
+          "base_branch": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "failed_executions": {
+            "type": "integer"
+          },
+          "guard_policy": {
+            "enum": [
+              "off",
+              "audit",
+              "enforce"
+            ],
+            "type": "string"
+          },
+          "harness": {
+            "$ref": "#/components/schemas/ContractHarnessBrief"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_git": {
+            "type": "boolean"
+          },
+          "last_activity_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_step": {
+            "$ref": "#/components/schemas/ContractNextStep"
+          },
+          "path": {
+            "type": "string"
+          },
+          "pending_approval_items": {
+            "items": {
+              "$ref": "#/components/schemas/ContractApprovalSummary"
+            },
+            "type": "array"
+          },
+          "pending_approvals": {
+            "type": "integer"
+          },
+          "phases": {
+            "items": {
+              "$ref": "#/components/schemas/ContractPhaseRef"
+            },
+            "type": "array"
+          },
+          "planning": {
+            "$ref": "#/components/schemas/ContractPlanning"
+          },
+          "progress_pct": {
+            "type": "integer"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ContractRequirementRef"
+            },
+            "type": "array"
+          },
+          "running_executions": {
+            "type": "integer"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/ContractTaskSummary"
+            },
+            "type": "array"
+          },
+          "tasks_phase": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path",
+          "is_git",
+          "active",
+          "progress_pct",
+          "running_executions",
+          "failed_executions",
+          "pending_approvals",
+          "guard_policy",
+          "phases",
+          "tasks",
+          "pending_approval_items",
+          "requirements",
+          "planning"
+        ],
+        "type": "object"
+      },
+      "ContractProjectList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContractProject"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ContractProposal": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ContractProposalError"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "workflow_version_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "valid",
+          "errors",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "ContractProposalError": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "path",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ContractRecovery": {
+        "properties": {
+          "last_log_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "log_lines": {
+            "type": "integer"
+          },
+          "orphan": {
+            "$ref": "#/components/schemas/ContractOrphan"
+          },
+          "partial_added": {
+            "type": "integer"
+          },
+          "partial_files": {
+            "type": "integer"
+          },
+          "partial_removed": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "resume_session": {
+            "type": "string"
+          },
+          "timeline": {
+            "items": {
+              "$ref": "#/components/schemas/ContractStateChange"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "partial_files",
+          "partial_added",
+          "partial_removed",
+          "log_lines",
+          "last_log_at",
+          "reason",
+          "timeline"
+        ],
+        "type": "object"
+      },
+      "ContractRegisterProjectRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "ContractReopenTasksRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "task_ids",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ContractRequirement": {
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "hash_now": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "file",
+              "text"
+            ],
+            "type": "string"
+          },
+          "recorded_hash": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "unchanged",
+              "changed"
+            ],
+            "type": "string"
+          },
+          "used_by": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "kind",
+          "added_at",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContractRequirementList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContractRequirement"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ContractRequirementRef": {
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "unchanged",
+              "changed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContractResolveRequest": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "fail",
+              "complete_partial",
+              "resume",
+              "retry_fresh"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      },
+      "ContractReviewTask": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "duration_s": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "files_changed": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "backlog",
+              "ready",
+              "in_progress",
+              "waiting_approval",
+              "in_review",
+              "blocked",
+              "done",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "state_detail": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "title",
+          "state",
+          "attempts",
+          "files_changed"
+        ],
+        "type": "object"
+      },
+      "ContractSession": {
+        "properties": {
+          "csrf_token": {
+            "type": "string"
+          },
+          "elevation": {
+            "$ref": "#/components/schemas/ContractElevation"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "passphrase_set": {
+            "type": "boolean"
+          },
+          "scope": {
+            "enum": [
+              "operator",
+              "human"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "csrf_token",
+          "expires_at",
+          "passphrase_set"
+        ],
+        "type": "object"
+      },
+      "ContractSettings": {
+        "properties": {
+          "elevation_window_min": {
+            "type": "integer"
+          },
+          "hard_cap": {
+            "type": "integer"
+          },
+          "heartbeat_interval_s": {
+            "type": "integer"
+          },
+          "lan_enabled": {
+            "type": "boolean"
+          },
+          "last_backup_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "last_backup_bytes": {
+            "type": "integer"
+          },
+          "listen": {
+            "type": "string"
+          },
+          "log_max_mb": {
+            "type": "integer"
+          },
+          "log_retention_days": {
+            "type": "integer"
+          },
+          "max_concurrent": {
+            "type": "integer"
+          },
+          "passphrase_set": {
+            "type": "boolean"
+          },
+          "session_ttl_h": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "passphrase_set",
+          "elevation_window_min",
+          "listen",
+          "lan_enabled",
+          "max_concurrent",
+          "hard_cap",
+          "heartbeat_interval_s",
+          "log_retention_days",
+          "log_max_mb",
+          "session_ttl_h"
+        ],
+        "type": "object"
+      },
+      "ContractStateChange": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "starting",
+              "running",
+              "waiting_approval",
+              "paused",
+              "completed",
+              "failed",
+              "cancelled",
+              "interrupted",
+              "disconnected",
+              "blocked"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContractStatusResponse": {
+        "properties": {
+          "audit": {
+            "$ref": "#/components/schemas/ContractAuditStatus"
+          },
+          "claude_code_version": {
+            "type": "string"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/ContractCounts"
+          },
+          "needs_attention": {
+            "items": {
+              "$ref": "#/components/schemas/ContractAttentionItem"
+            },
+            "type": "array"
+          },
+          "next_step": {
+            "$ref": "#/components/schemas/ContractNextStep"
+          },
+          "server_version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_version",
+          "counts",
+          "audit",
+          "needs_attention"
+        ],
+        "type": "object"
+      },
+      "ContractStepUpRequest": {
+        "properties": {
+          "approval_id": {
+            "type": "string"
+          },
+          "passphrase": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "passphrase"
+        ],
+        "type": "object"
+      },
+      "ContractStepUpResponse": {
+        "properties": {
+          "approval_id": {
+            "type": "string"
+          },
+          "elevation_secret": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "window",
+              "single_use"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "elevation_secret",
+          "kind",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "ContractSubmitResponse": {
+        "properties": {
+          "approval_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id"
+        ],
+        "type": "object"
+      },
+      "ContractTaskSummary": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "code_change",
+              "read_only"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "backlog",
+              "ready",
+              "in_progress",
+              "waiting_approval",
+              "in_review",
+              "blocked",
+              "done",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "state_detail": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "title",
+          "state",
+          "mode",
+          "depends_on"
+        ],
+        "type": "object"
+      },
+      "ContractUsage": {
+        "properties": {
+          "cost_usd": {
+            "type": [
+              "null",
+              "number"
+            ]
+          },
+          "tokens_in": {
+            "type": "integer"
+          },
+          "tokens_out": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tokens_in",
+          "tokens_out"
+        ],
+        "type": "object"
+      },
+      "ContractValidator": {
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "command",
+              "checklist"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "timeout_s": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name"
+        ],
+        "type": "object"
+      },
+      "ContractValidatorChecklistItem": {
+        "properties": {
+          "confirmed": {
+            "type": "boolean"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "confirmed"
+        ],
+        "type": "object"
+      },
+      "ContractValidatorResult": {
+        "properties": {
+          "duration_s": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "exit_code": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContractValidatorChecklistItem"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "command",
+              "checklist"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "passed",
+              "failed",
+              "waiting"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ContractWorkflowInfo": {
+        "properties": {
+          "current_id": {
+            "type": "string"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ContractWorkflowVersionSummary"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "versions"
+        ],
+        "type": "object"
+      },
+      "ContractWorkflowPhase": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "objective": {
+            "type": "string"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/ContractWorkflowTask"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "validators": {
+            "items": {
+              "$ref": "#/components/schemas/ContractValidator"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "title",
+          "objective",
+          "tasks",
+          "validators"
+        ],
+        "type": "object"
+      },
+      "ContractWorkflowTask": {
+        "properties": {
+          "acceptance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "code": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "code_change",
+              "read_only"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "title",
+          "mode",
+          "acceptance"
+        ],
+        "type": "object"
+      },
+      "ContractWorkflowVersion": {
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "phases": {
+            "items": {
+              "$ref": "#/components/schemas/ContractWorkflowPhase"
+            },
+            "type": "array"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "proposal_id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "draft",
+              "awaiting_approval",
+              "approved",
+              "rejected",
+              "superseded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "state",
+          "content_hash",
+          "created_at",
+          "project_id",
+          "project_name",
+          "phases"
+        ],
+        "type": "object"
+      },
+      "ContractWorkflowVersionSummary": {
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "draft",
+              "awaiting_approval",
+              "approved",
+              "rejected",
+              "superseded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "state",
+          "content_hash",
+          "created_at"
+        ],
+        "type": "object"
+      }
+    }
+  }
+}

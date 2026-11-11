@@ -1,0 +1,39 @@
+/* Tokens: light by default, dark by system preference, manual override through data-theme. */
+:root {
+  --bg: #F5F6F8; --surface: #FFFFFF; --surface-muted: #EEF0F3; --border: #D8DCE3; --border-strong: #8A93A2;
+  --text: #11151B; --text-muted: #566170; --primary: #1F5FD1; --primary-text: #FFFFFF; --focus: #1F5FD1;
+  --status-active: #1F4FB8; --status-active-soft: #E3EBFB;
+  --status-attention: #6B3FC4; --status-attention-soft: #EEE7FB;
+  --status-ok: #1B6E3C; --status-ok-soft: #E1F4E8;
+  --status-danger: #B42318; --status-danger-soft: #FDE7E4;
+  --status-warning: #8A5300; --status-warning-soft: #FBEFD5;
+  --status-neutral: #4A5361; --status-neutral-soft: #ECEEF1;
+  --overlay: rgba(0, 0, 0, 0.45);
+  /* Command blocks are near-black in both themes. */
+  --code-bg: #0A0B0D; --code-text: #E8EAEE; --code-border: #2A2D33;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0A0B0D; --surface: #131417; --surface-muted: #1B1D21; --border: #2A2D33; --border-strong: #6B7280;
+    --text: #E8EAEE; --text-muted: #A0A7B3; --primary: #6EA8FF; --primary-text: #0A0B0D; --focus: #6EA8FF;
+    --status-active: #8DB4FF; --status-active-soft: #14284F;
+    --status-attention: #C4A8FF; --status-attention-soft: #2A1D4D;
+    --status-ok: #6FD59A; --status-ok-soft: #11331F;
+    --status-danger: #FF8F85; --status-danger-soft: #3F1511;
+    --status-warning: #F0B35A; --status-warning-soft: #3A2A0C;
+    --status-neutral: #B0B7C3; --status-neutral-soft: #24272D;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #0A0B0D; --surface: #131417; --surface-muted: #1B1D21; --border: #2A2D33; --border-strong: #6B7280;
+  --text: #E8EAEE; --text-muted: #A0A7B3; --primary: #6EA8FF; --primary-text: #0A0B0D; --focus: #6EA8FF;
+  --status-active: #8DB4FF; --status-active-soft: #14284F;
+  --status-attention: #C4A8FF; --status-attention-soft: #2A1D4D;
+  --status-ok: #6FD59A; --status-ok-soft: #11331F;
+  --status-danger: #FF8F85; --status-danger-soft: #3F1511;
+  --status-warning: #F0B35A; --status-warning-soft: #3A2A0C;
+  --status-neutral: #B0B7C3; --status-neutral-soft: #24272D;
+  color-scheme: dark;
+}

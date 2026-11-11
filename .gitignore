@@ -1,0 +1,35 @@
+# Build output
+/bin/
+/dist/
+/release/
+web/node_modules/
+web/dist/
+web/.mock-dist/
+coverage/
+test-results/
+playwright-report/
+*.test
+*.out
+
+# Secrets and local data: never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
+.netrc
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/
+.release-check/
