@@ -9,6 +9,8 @@
   import { ApiError } from '../api/client';
   import Note from './Note.svelte';
   import Btn from './Btn.svelte';
+  import Icon from './Icon.svelte';
+  import { visible } from './text';
 
   interface Props {
     title: string;
@@ -53,6 +55,8 @@
 
   const chainBroken = $derived(err?.code === 'audit_chain_broken' || blocked);
   const lockedOut = $derived(wait > 0);
+  const wrong = $derived(err?.code === 'stepup_failed'); // shown on the field itself, not in a note above it
+  let fails = $state(0); // each failure replays the shake
   const fmt = (s: number) => `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`;
 
   async function submit(e: Event) {
@@ -66,6 +70,7 @@
       await onconfirm(typed);
     } catch (x) {
       err = x instanceof ApiError ? x : new ApiError(0, 'unknown', String(x));
+      if (err.code === 'stepup_failed') fails++;
       if (err.code === 'rate_limited') startWait(err.body?.retry_after_s ?? 30);
     } finally {
       busy = false;
@@ -80,22 +85,28 @@
     <div class="mh"><div class="small muted">{kicker}</div><h2 id="su-title">{title}</h2></div>
     <div class="mb">
       {#if facts.length}
-        <dl class="kv">{#each facts as f}<dt>{f.label}</dt><dd class:mono={f.mono}>{f.value}</dd>{/each}</dl>
+        <dl class="kv">{#each facts as f}<dt>{f.label}</dt><dd class:mono={f.mono}>{visible(f.value)}</dd>{/each}</dl>
       {/if}
       {@render extra?.()}
       {#if chainBroken}
         <Note kind="warn" role="alert"><b>Approvals are blocked.</b> The audit chain did not verify{err?.body?.record ? ` at record ${err.body.record.toLocaleString('en')}` : ''}. A human must acknowledge this on the Activity page first.</Note>
       {:else if lockedOut}
         <Note kind="dng" role="alert"><b>Too many attempts.</b> Try again in {fmt(wait)}. The failed attempts were recorded in the audit log.</Note>
-      {:else if err?.code === 'stepup_failed'}
-        <Note kind="dng" icon="fail" role="alert"><b>Wrong passphrase.</b> {err.body?.attempts_left ?? 0} {err.body?.attempts_left === 1 ? 'attempt' : 'attempts'} left before a delay. Nothing was approved.</Note>
-      {:else if err}
+      {:else if err && !wrong}
         <Note kind="dng" icon="fail" role="alert"><b>{err.message}</b>{#if err.nextStep} {err.nextStep}{/if}</Note>
       {/if}
       {#if needPassphrase}
         <div>
           <label class="lbl" for="su-pass">{fieldLabel}</label>
-          <input id="su-pass" class="field w-full min-h-9" type="password" autocomplete="off" spellcheck="false" bind:value={pass} disabled={chainBroken || lockedOut || busy} />
+          {#key fails}
+            <div class="pw" class:bad={wrong}>
+              <input id="su-pass" class="field w-full min-h-9" type="password" autocomplete="off" spellcheck="false" bind:value={pass} disabled={chainBroken || lockedOut || busy} aria-invalid={wrong || undefined} aria-describedby={wrong ? 'su-wrong' : undefined} />
+              {#if wrong}<span class="pw-x" aria-hidden="true"><Icon name="fail" size={20} stroke={2} /></span>{/if}
+            </div>
+          {/key}
+          {#if wrong}
+            <p id="su-wrong" class="pw-msg" role="alert"><b>Wrong passphrase.</b> {err?.body?.attempts_left ?? 0} {err?.body?.attempts_left === 1 ? 'attempt' : 'attempts'} left before a delay. Nothing was approved.</p>
+          {/if}
         </div>
         <div class="muted">{note ?? 'Typed into this page only; not stored, not logged. Valid for this one action.'}</div>
       {:else}

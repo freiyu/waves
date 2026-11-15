@@ -307,7 +307,7 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request, _ core.Princip
 	out := contract.Settings{
 		PassphraseSet: s.core.PassphraseSet(r.Context()), ElevationWindowMin: v["elevation_window_min"], Listen: fmt.Sprintf("127.0.0.1:%d", s.port),
 		MaxConcurrent: v["max_concurrent"], HardCap: v["hard_cap"], HeartbeatS: v["heartbeat_interval_s"], LogRetentionDays: v["log_retention_days"],
-		LogMaxMB: v["log_max_mb"], SessionTTLHours: v["session_ttl_h"], LastBackupBytes: size,
+		LogMaxMB: v["log_max_mb"], SessionTTLHours: v["session_ttl_h"], WaitingMaxH: v["waiting_max_h"], LastBackupBytes: size,
 	}
 	if at != "" {
 		t := store.ParseTime(at)
@@ -326,7 +326,7 @@ func (s *Server) patchSettings(w http.ResponseWriter, r *http.Request, p core.Pr
 		return err
 	}
 	ch := map[string]int{}
-	for k, v := range map[string]*int{"elevation_window_min": req.ElevationWindowMin, "max_concurrent": req.MaxConcurrent, "heartbeat_interval_s": req.HeartbeatS, "log_retention_days": req.LogRetentionDays} {
+	for k, v := range map[string]*int{"elevation_window_min": req.ElevationWindowMin, "max_concurrent": req.MaxConcurrent, "heartbeat_interval_s": req.HeartbeatS, "log_retention_days": req.LogRetentionDays, "waiting_max_h": req.WaitingMaxH} {
 		if v != nil {
 			ch[k] = *v
 		}

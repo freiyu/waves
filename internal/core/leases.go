@@ -290,6 +290,19 @@ func (s *Service) Heartbeat(ctx context.Context, p Principal, mcpSession, token 
 				return err
 			}
 		}
+		// A heartbeat is the agent working again: it is no longer waiting for the human.
+		if ended, err := endWait(ctx, t, s.ts(), l.execution, "resumed"); err != nil {
+			return err
+		} else if ended {
+			if err := s.renewWindow(ctx, t, l.id); err != nil {
+				return err
+			}
+			out.ExpiresAt = s.now().Add(expireAfter * s.heartbeatInterval(ctx))
+			t.publish("execution.changed", map[string]string{"execution_id": l.execution})
+			if err := s.waitAudit(ctx, t, l.execution, "execution.resumed", "agent", map[string]any{"by": "heartbeat", "actor": p.ActorRef()}); err != nil {
+				return err
+			}
+		}
 		var ps string
 		t.QueryRowContext(ctx, `SELECT state FROM phases WHERE id = ?`, l.phase).Scan(&ps)
 		var apr sql.NullString
@@ -303,7 +316,7 @@ func (s *Service) Heartbeat(ctx context.Context, p Principal, mcpSession, token 
 
 // ReportProgress appends a progress line to the execution.
 func (s *Service) ReportProgress(ctx context.Context, p Principal, mcpSession, token, message string, percent *int) error {
-	message = truncate(message, 2000)
+	message = Visible(truncate(message, 2000)) // a progress line is read in a terminal and a log view: no raw escape or direction characters
 	err := s.tx(ctx, func(t *Tx) error {
 		l, err := s.lease(ctx, t, p, mcpSession, token)
 		if err != nil {
@@ -324,6 +337,9 @@ func (s *Service) ReportBlocker(ctx context.Context, p Principal, mcpSession, to
 	reason = truncate(reason, 2000)
 	if strings.TrimSpace(reason) == "" {
 		return errValidation("A blocker needs a reason.", "")
+	}
+	if e := plainText("The blocker", reason); e != nil {
+		return e
 	}
 	return s.tx(ctx, func(t *Tx) error {
 		l, err := s.lease(ctx, t, p, mcpSession, token)
@@ -347,6 +363,11 @@ func (s *Service) ReportBlocker(ctx context.Context, p Principal, mcpSession, to
 // RequestRiskyApproval puts the execution in Waiting Approval and opens a
 // risky_action approval. The agent reads the decision on its next heartbeat.
 func (s *Service) RequestRiskyApproval(ctx context.Context, p Principal, mcpSession, token, action, reason, impact string) (string, error) {
+	for _, f := range [][2]string{{"The action", action}, {"The reason", reason}, {"The impact", impact}} {
+		if e := plainText(f[0], f[1]); e != nil {
+			return "", e
+		}
+	}
 	var apr string
 	err := s.tx(ctx, func(t *Tx) error {
 		l, err := s.lease(ctx, t, p, mcpSession, token)
@@ -371,16 +392,21 @@ func (s *Service) SubmitResult(ctx context.Context, p Principal, mcpSession, tok
 	if status != "completed" && status != "failed" {
 		return errValidation("status must be completed or failed.", "")
 	}
+	if e := plainText("The summary", summary); e != nil {
+		return e
+	}
 	l, err := s.lease(ctx, s.db.R, p, mcpSession, token)
 	if err != nil {
 		return err
 	}
 	diffPath, files := s.captureDiff(ctx, l.execution)
+	// Only a workspace verified equal to what it was at claim time counts as untouched; one that cannot be checked is reviewed.
+	untouched := s.workspaceUnchanged(ctx, l.execution)
 	return s.tx(ctx, func(t *Tx) error {
 		if l, err = s.lease(ctx, t, p, mcpSession, token); err != nil {
 			return err
 		}
-		res, _ := json.Marshal(map[string]any{"summary": truncate(summary, 8000), "status": status, "artifacts": artifacts, "files_changed": files})
+		res, _ := json.Marshal(map[string]any{"summary": truncate(summary, 8000), "status": status, "artifacts": visibleAll(artifacts), "files_changed": files})
 		if _, err := t.ExecContext(ctx, `UPDATE executions SET result_json = ?, diff_path = ?, end_commit = ? WHERE id = ?`, string(res), store.NullStr(diffPath), store.NullStr(s.headOf(ctx, t, l.project)), l.execution); err != nil {
 			return wrap(err, "store result")
 		}
@@ -400,7 +426,8 @@ func (s *Service) SubmitResult(ctx context.Context, p Principal, mcpSession, tok
 		}
 		var mode string
 		t.QueryRowContext(ctx, `SELECT workspace_mode FROM tasks WHERE id = ?`, l.task).Scan(&mode)
-		if mode == "read_only" {
+		// A read-only task that left files changed, or whose workspace cannot be verified, goes to review like any other result.
+		if mode == "read_only" && untouched {
 			if _, err := s.transition(ctx, t, "task", l.task, "Done", sysActor, "read-only result accepted", ""); err != nil {
 				return err
 			}
@@ -446,6 +473,7 @@ func (s *Service) ReleaseTask(ctx context.Context, p Principal, mcpSession, toke
 	if err != nil {
 		return "", err
 	}
+	reason = Visible(reason) // the reason lands in the audit log and the Activity page
 	unchanged := s.workspaceUnchanged(ctx, l.execution)
 	var to string
 	err = s.tx(ctx, func(t *Tx) error {
@@ -529,7 +557,7 @@ func (s *Service) appendLog(execution, line string) {
 		return
 	}
 	defer f.Close()
-	fmt.Fprintf(f, "%s %s\n", s.now().Local().Format("15:04:05"), strings.ReplaceAll(line, "\n", " "))
+	fmt.Fprintf(f, "%s %s\n", s.now().Local().Format("15:04:05"), strings.ReplaceAll(Visible(line), "\n", " "))
 	if st, err := f.Stat(); err == nil {
 		s.bus.Publish("execution.log", map[string]any{"execution_id": execution, "offset": st.Size()})
 	}
@@ -570,16 +598,19 @@ func (s *Service) leaseLoop(ctx context.Context) {
 func (s *Service) expireLeases(ctx context.Context) time.Time {
 	hb := s.heartbeatInterval(ctx)
 	now := s.now()
-	rows, err := s.db.R.QueryContext(ctx, `SELECT l.id, l.execution_id, l.task_id, l.last_heartbeat_at, l.expires_at, e.state FROM leases l JOIN executions e ON e.id = l.execution_id WHERE l.revoked_at IS NULL`)
+	rows, err := s.db.R.QueryContext(ctx, `SELECT l.id, l.execution_id, l.task_id, l.last_heartbeat_at, l.expires_at, e.state, EXISTS(SELECT 1 FROM execution_waits w WHERE w.execution_id = e.id AND w.ended_at IS NULL) FROM leases l JOIN executions e ON e.id = l.execution_id WHERE l.revoked_at IS NULL`)
 	if err != nil {
 		s.log.Error("read leases", "err", err)
 		return now.Add(time.Minute)
 	}
-	type lr struct{ id, exe, task, last, exp, state string }
+	type lr struct {
+		id, exe, task, last, exp, state string
+		waiting                         bool
+	}
 	var all []lr
 	for rows.Next() {
 		var l lr
-		rows.Scan(&l.id, &l.exe, &l.task, &l.last, &l.exp, &l.state)
+		rows.Scan(&l.id, &l.exe, &l.task, &l.last, &l.exp, &l.state, &l.waiting)
 		all = append(all, l)
 	}
 	rows.Close()
@@ -597,8 +628,17 @@ func (s *Service) expireLeases(ctx context.Context) time.Time {
 			if err := s.expireLease(ctx, l.id, l.exe, l.task); err != nil {
 				s.log.Error("expire lease", "lease", l.id, "err", err)
 			}
+		case l.waiting:
+			soonest(exp) // waiting for the human is not silence; only the longest wait ends the lease
 		case l.state == "Running" && !disc.After(now):
 			err := s.tx(ctx, func(t *Tx) error {
+				// Still silent, still running and not waiting, as of this transaction.
+				var st, last string
+				var waiting int
+				t.QueryRowContext(ctx, `SELECT e.state, l.last_heartbeat_at, EXISTS(SELECT 1 FROM execution_waits w WHERE w.execution_id = e.id AND w.ended_at IS NULL) FROM leases l JOIN executions e ON e.id = l.execution_id WHERE l.id = ?`, l.id).Scan(&st, &last, &waiting)
+				if st != "Running" || waiting == 1 || store.ParseTime(last).Add(disconnectAfter*hb).After(now) {
+					return nil
+				}
 				_, err := s.transition(ctx, t, "execution", l.exe, "Disconnected", sysActor, "heartbeat missed", "")
 				return err
 			})
@@ -619,8 +659,16 @@ func (s *Service) expireLeases(ctx context.Context) time.Time {
 // Interrupted and the task Blocked with recovery_required. Nothing reruns.
 func (s *Service) expireLease(ctx context.Context, lease, exe, task string) error {
 	return s.tx(ctx, func(t *Tx) error {
+		// The list was read a moment ago: a heartbeat, a wait or a sign of life may have renewed this lease since.
+		var exp string
+		if err := t.QueryRowContext(ctx, `SELECT expires_at FROM leases WHERE id = ? AND revoked_at IS NULL`, lease).Scan(&exp); err != nil || store.ParseTime(exp).After(s.now()) {
+			return nil
+		}
 		if _, err := t.ExecContext(ctx, `UPDATE leases SET revoked_at = ?, revoke_reason = 'expired' WHERE id = ? AND revoked_at IS NULL`, s.ts(), lease); err != nil {
 			return wrap(err, "expire lease")
+		}
+		if _, err := endWait(ctx, t, s.ts(), exe, "expired"); err != nil {
+			return err
 		}
 		var st string
 		t.QueryRowContext(ctx, `SELECT state FROM executions WHERE id = ?`, exe).Scan(&st)

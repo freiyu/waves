@@ -35,6 +35,7 @@ func (e *Env) commands() map[string]func(context.Context, []string) error {
 		"status":       e.status,
 		"open":         e.open,
 		"doctor":       e.doctor,
+		"update":       e.update,
 		"project":      e.project,
 		"requirements": e.requirements,
 		"plan":         e.plan,
@@ -69,48 +70,75 @@ func (e *Env) pid() int {
 	n, _ := strconv.Atoi(strings.TrimSpace(string(b)))
 	// Only a process that is still a waves serve counts; pids get reused.
 	cmd, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", n))
-	if err != nil || !strings.Contains(string(cmd), "serve") {
+	if args := strings.Split(string(cmd), "\x00"); err != nil || len(args) < 2 || args[1] != "serve" {
 		return 0
 	}
 	return n
 }
 
 func (e *Env) start(ctx context.Context, _ []string) error {
-	if e.healthy(ctx) {
-		fmt.Fprintln(e.Out, "Waves is already running.")
-		return nil
-	}
-	if _, err := os.Stat(e.Dirs.OperatorToken()); err != nil {
-		return errors.New("Waves is not set up yet; run: waves setup")
-	}
-	if err := os.MkdirAll(e.Dirs.State, 0o700); err != nil {
-		return err
-	}
-	logf, err := os.OpenFile(filepath.Join(e.Dirs.State, "service.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return err
-	}
-	defer logf.Close()
 	self, err := os.Executable()
 	if err != nil {
 		return err
 	}
+	notice := e.checkForUpdate(ctx)
+	if _, err = e.startBinary(ctx, self, 5*time.Second); err != nil {
+		return err
+	}
+	e.announceUpdate(<-notice)
+	return nil
+}
+
+// startBinary runs `serve` from the given binary in the background and waits up to `wait` for it to answer. It returns the process id
+// it started (0 when none was started), so an update that gives up can stop that very process. After an update the binary is the new
+// file, not this process.
+func (e *Env) startBinary(ctx context.Context, self string, wait time.Duration) (int, error) {
+	if e.healthy(ctx) {
+		fmt.Fprintln(e.Out, "Waves is already running.")
+		return 0, nil
+	}
+	if _, err := os.Stat(e.Dirs.OperatorToken()); err != nil {
+		return 0, errors.New("Waves is not set up yet; run: waves setup")
+	}
+	if err := os.MkdirAll(e.Dirs.State, 0o700); err != nil {
+		return 0, err
+	}
+	logf, err := os.OpenFile(filepath.Join(e.Dirs.State, "service.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return 0, err
+	}
+	defer logf.Close()
 	cmd := exec.Command(self, "serve")
 	cmd.Stdout, cmd.Stderr = logf, logf
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start the service: %w", err)
+		return 0, fmt.Errorf("start the service: %w", err)
 	}
+	pid := cmd.Process.Pid
 	cmd.Process.Release()
-	for i := 0; i < 50; i++ {
+	for end := time.Now().Add(wait); time.Now().Before(end); time.Sleep(100 * time.Millisecond) {
+		if gone(pid) {
+			return pid, fmt.Errorf("the service stopped right after it started; see %s", filepath.Join(e.Dirs.State, "service.log"))
+		}
 		if e.healthy(ctx) {
 			cfg, _ := config.Load(e.Dirs)
 			fmt.Fprintf(e.Out, "Waves is running at http://%s. Sign in with: waves open\n", cfg.Addr())
-			return nil
+			return pid, nil
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
-	return fmt.Errorf("the service did not come up; see %s", filepath.Join(e.Dirs.State, "service.log"))
+	return pid, fmt.Errorf("the service did not come up; see %s", filepath.Join(e.Dirs.State, "service.log"))
+}
+
+// gone reports whether a process we started has exited (it stays a zombie until this command ends, so a signal test would not tell).
+func gone(pid int) bool {
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return true
+	}
+	// "pid (name) S ...": the state follows the last closing parenthesis.
+	s := string(b)
+	i := strings.LastIndex(s, ")")
+	return i < 0 || len(s) < i+3 || s[i+2] == 'Z' || s[i+2] == 'X'
 }
 
 func (e *Env) stop(ctx context.Context, _ []string) error {
@@ -233,6 +261,10 @@ func (e *Env) doctor(ctx context.Context, _ []string) error {
 						check("hook "+pr.Name, false, g.Drift+". Fix the file, then: waves project switch "+pr.Name+" and waves guard "+g.Policy)
 					} else if g.Installed {
 						check("hook "+pr.Name, true, "guard "+g.Policy)
+						if !g.WaitingHooks {
+							// A notice, not a failure: nothing unsafe, a feature is off.
+							fmt.Fprintf(e.Out, "note  %-22s waiting for instruction is not active: connect again with waves agent connect claude-code\n", "hooks "+pr.Name)
+						}
 					}
 				}
 			}
@@ -678,17 +710,17 @@ func (e *Env) review(ctx context.Context, c *client, id string) error {
 	if err := c.get(ctx, "/approvals/"+url.PathEscape(id), &d); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.Out, "%s: %s\nProject: %s · requested by %s\n\n", d.CategoryLabel, d.Action, d.ProjectName, d.RequestedBy)
+	fmt.Fprintf(e.Out, "%s: %s\nProject: %s · requested by %s\n\n", d.CategoryLabel, core.Visible(d.Action), d.ProjectName, d.RequestedBy)
 	for _, f := range d.Facts {
-		fmt.Fprintf(e.Out, "  %s: %s\n", f.Label, f.Value)
+		fmt.Fprintf(e.Out, "  %s: %s\n", f.Label, core.Visible(f.Value))
 	}
 	if len(d.Commands) > 0 {
 		fmt.Fprintln(e.Out, "\nCommands Waves will run:")
 		for _, cmd := range d.Commands {
-			fmt.Fprintln(e.Out, "  "+cmd)
+			fmt.Fprintln(e.Out, "  "+core.Visible(cmd))
 		}
 	}
-	fmt.Fprintf(e.Out, "\n%s\n\n", d.Impact)
+	fmt.Fprintf(e.Out, "\n%s\n\n", core.Visible(d.Impact))
 	if d.State != "pending" {
 		fmt.Fprintf(e.Out, "This approval is already %s.\n", d.State)
 		return nil

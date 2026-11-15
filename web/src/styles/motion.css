@@ -1,31 +1,112 @@
-/* Motion: transform and opacity, except the row flash (background colour), the hover colour transitions and the width of the chip bubble (a spring driven by script, not CSS).
-   Durations: page 120 ms, dialog and palette 160, dropdown and tooltip 100, tab underline 180, status pulse 1.6 s,
-   skeleton shimmer 1.4 s, row flash 600, toast 200 in and 150 out. Reduced motion turns all of it off. */
+/* Motion. Animated properties are transform and opacity, with a few small exceptions (row flash colour, link underline size,
+   the row-expand grid track, the icon blur). Entrances use --ease-out, moves --ease-move, nothing bounces, and an exit is
+   about 20% shorter than its entrance (--dur-*-out). Nothing tweens while an element is held. Reduced motion turns all of it off.
+   Durations: dropdown, tooltip and tab underline 150 to 250 ms, dialog 200/160, page 150, list stagger 30 ms per row,
+   status pulse 1.6 s, skeleton 1.4 s, row flash 600 ms, toast 200 in and 150 out. */
 @keyframes w-page { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-@keyframes w-pop-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
-@keyframes w-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.98); } }
+@keyframes w-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes w-pop-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: none; } }
+@keyframes w-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.95); } }
 @keyframes w-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes w-fade-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes w-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.82); } }
+@keyframes w-confirm { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
 @keyframes w-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 @keyframes w-toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes w-toast-out { from { opacity: 1; } to { opacity: 0; } }
 
-.page-in { animation: w-page 120ms ease-out; }
-.pop[data-state='open'] { animation: w-pop-in 160ms ease-out; }
-.pop[data-state='closed'] { animation: w-pop-out 120ms ease-in forwards; }
-.overlay[data-state='open'] { animation: w-fade-in 160ms ease-out; }
-.overlay[data-state='closed'] { animation: w-fade-out 120ms ease-in forwards; }
-.menu-pop[data-state='open'], .tip[data-state='delayed-open'], .tip[data-state='instant-open'] { animation: w-fade-in 100ms ease-out; }
-.menu-pop[data-state='closed'], .tip[data-state='closed'] { animation: w-fade-out 100ms ease-in forwards; }
+.page-in { animation: w-page var(--dur-fast) var(--ease-out); }
+/* Dialogs, the palette, popovers and menus start at 0.95; menus and tooltips grow from their trigger and leave toward it. */
+.pop[data-state='open'] { animation: w-pop-in var(--dur-base) var(--ease-out); }
+.pop[data-state='closed'] { animation: w-pop-out var(--dur-base-out) ease-in forwards; }
+.overlay[data-state='open'] { animation: w-fade-in var(--dur-base) var(--ease-out); }
+.overlay[data-state='closed'] { animation: w-fade-out var(--dur-base-out) ease-in forwards; }
+.menu-pop, .tip { transform-origin: var(--bits-floating-transform-origin, center); }
+.menu-pop[data-state='open'], .tip[data-state='delayed-open'], .tip[data-state='instant-open'] { animation: w-pop-in var(--dur-fast) var(--ease-out); }
+.menu-pop[data-state='closed'], .tip[data-state='closed'] { animation: w-pop-out var(--dur-fast-out) ease-in forwards; }
 .pulse { animation: w-pulse 1.6s ease-in-out infinite; }
+.confirm-pulse { animation: w-confirm var(--dur-slow) var(--ease-out); }
 .skeleton { position: relative; overflow: hidden; }
 .skeleton::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 70%, transparent), transparent); animation: w-shimmer 1.4s linear infinite; }
-/* A row changed by a live event flashes its background for 600 ms, then settles (the design's one exception to transform and opacity). */
+
+/* A row changed by a live event flashes its background for 600 ms, then settles. */
 @keyframes w-flash-bg { from { background-color: var(--status-active-soft); } }
 tr.flash > td { animation: w-flash-bg 600ms ease-out; }
 .li-flash { animation: w-flash-bg 600ms ease-out; }
-.tab-line { transition: transform 180ms ease-out; transform-origin: left; }
+
+/* List rows enter one after the other, 30 ms apart; rows past the tenth enter together so a long list is never slow. */
+.stagger > * { animation: w-rise var(--dur-base) var(--ease-out) both; }
+.stagger > :nth-child(2) { animation-delay: calc(1 * var(--stagger)); }
+.stagger > :nth-child(3) { animation-delay: calc(2 * var(--stagger)); }
+.stagger > :nth-child(4) { animation-delay: calc(3 * var(--stagger)); }
+.stagger > :nth-child(5) { animation-delay: calc(4 * var(--stagger)); }
+.stagger > :nth-child(6) { animation-delay: calc(5 * var(--stagger)); }
+.stagger > :nth-child(7) { animation-delay: calc(6 * var(--stagger)); }
+.stagger > :nth-child(8) { animation-delay: calc(7 * var(--stagger)); }
+.stagger > :nth-child(9) { animation-delay: calc(8 * var(--stagger)); }
+.stagger > :nth-child(n + 10) { animation-delay: calc(9 * var(--stagger)); }
+
+/* Press: every button gives under the finger. */
+.press { transition: transform var(--dur-fast-out) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.press:active:not(:disabled) { transform: scale(0.97); }
+
+/* Task, phase and workflow names are links: text colour at rest, colour and a 2 px underline that is drawn from the left on hover. */
+.tlink { color: var(--text); font-weight: 600; text-decoration: none; background: linear-gradient(currentColor, currentColor) no-repeat 0 100% / 0 2px;
+  transition: background-size var(--dur-fast-out) var(--ease-out), color var(--dur-fast-out) var(--ease-out); padding-bottom: 1px; }
+.tlink:hover, .tlink:focus-visible { color: var(--primary); background-size: 100% 2px; transition-duration: var(--dur-base), var(--dur-base); }
+
+/* Icon actions: a 36 px square. On hover or keyboard focus the face grows to the left with a one-word label (also the aria-label); the
+   buttons to its left are pushed left and never covered. On touch there is no hover: 44 px target, the primary keeps its word. */
+.ibtn { display: inline-flex; flex: none; height: 36px; }
+.ibtn > .face { position: relative; z-index: 1; display: flex; flex-direction: row-reverse; align-items: center; width: 36px; height: 36px; overflow: hidden; flex: none;
+  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; padding: 0;
+  transition: width var(--dur-base-out) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast-out) var(--ease-out); }
+.ibtn > .face > .ico { display: grid; place-items: center; flex: none; width: 34px; height: 34px; }
+.ibtn > .face > .lab { flex: none; padding-left: 12px; font-size: 14px; font-weight: 600; white-space: nowrap; opacity: 0; transition: opacity var(--dur-fast-out) var(--ease-out); }
+.ibtn > .face:hover:not(:disabled), .ibtn > .face:focus-visible { width: var(--roll, 124px); transition-duration: var(--dur-base), var(--dur-fast), var(--dur-fast-out); }
+.ibtn > .face:hover:not(:disabled) > .lab, .ibtn > .face:focus-visible > .lab { opacity: 1; }
+.ibtn > .face:active { transform: scale(0.97); }
+.ibtn > .face.pri { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
+.ibtn > .face.dng { color: var(--status-danger); }
+.ibtn > .face:disabled { cursor: not-allowed; opacity: 0.5; }
+@media (pointer: coarse) {
+  .ibtn { height: 44px; }
+  .ibtn > .face { width: 44px; height: 44px; }
+  .ibtn > .face > .ico { width: 42px; height: 42px; }
+  .ibtn > .face:hover, .ibtn > .face:focus-visible { width: 44px; }
+  .ibtn > .face > .lab { display: none; }
+  /* the primary action keeps its word on touch, and a tap must not fold it */
+  .ibtn > .face.pri, .ibtn > .face.pri:hover, .ibtn > .face.pri:focus-visible { width: var(--roll); }
+  .ibtn > .face.pri > .lab { display: block; opacity: 1; }
+}
+
+/* The theme change: the old and new page cross-fade (view transitions), or the colours fade where those are missing. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 380ms; animation-timing-function: var(--ease-move); }
+.theme-fade, .theme-fade *, .theme-fade *::before, .theme-fade *::after { transition: background-color 360ms var(--ease-move), color 360ms var(--ease-move), border-color 360ms var(--ease-move), fill 360ms var(--ease-move), stroke 360ms var(--ease-move) !important; }
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
+
+/* Panes of one project stay mounted and stacked in one grid cell: the old one fades out while the new one fades in (an overlap),
+   and a switch can be reversed halfway because it is a transition, not a script. */
+.panes { display: grid; }
+.panes > .pane { grid-area: 1 / 1; min-width: 0; opacity: 0; transform: translateY(4px); visibility: hidden; pointer-events: none;
+  max-height: 0; overflow: hidden;
+  transition: opacity var(--dur-base-out) var(--ease-move), transform var(--dur-base-out) var(--ease-move), visibility 0s linear var(--dur-base-out), max-height 0s linear var(--dur-base-out) allow-discrete; }
+.panes > .pane[data-active='true'] { opacity: 1; transform: none; visibility: visible; pointer-events: auto; max-height: none; overflow: visible;
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out), visibility 0s, max-height 0s allow-discrete; }
+
+/* Expand and collapse: the height follows the content through a grid track, no measuring script. */
+.expand { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows var(--dur-base-out) var(--ease-move), opacity var(--dur-base-out) var(--ease-move); }
+.expand > * { overflow: hidden; min-height: 0; }
+.expand[data-open='true'] { grid-template-rows: 1fr; opacity: 1; transition-duration: var(--dur-base), var(--dur-base); }
+
+/* Two icons in one place: the old fades out as the new fades in, with a small blur. */
+.swap { position: relative; display: inline-grid; }
+.swap > * { grid-area: 1 / 1; transition: opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.swap > [data-on='false'] { opacity: 0; filter: blur(3px); transform: scale(0.85); }
+
+/* The sliding tab indicator moves with an ease-in-out transform (the 12% stretch while it travels is not built). */
+.tab-line { transition: transform var(--dur-base) var(--ease-move); transform-origin: left; }
+
 /* Toasts: square look (radius 4), Waves tokens, 200 ms in and 150 ms out. */
 [data-sonner-toaster] { --normal-bg: var(--surface); --normal-text: var(--text); --normal-border: var(--border); --border-radius: 4px;
   --success-bg: var(--surface); --success-text: var(--text); --success-border: var(--border);
@@ -33,9 +114,20 @@ tr.flash > td { animation: w-flash-bg 600ms ease-out; }
 [data-sonner-toast] { transition-duration: 200ms !important; }
 [data-sonner-toast][data-removed='true'] { transition-duration: 150ms !important; }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .panes > .pane { transform: none; }
+  .expand > * { overflow: visible; }
 }
 .dots { display: inline-flex; gap: 4px; align-items: center; }
 .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); animation: w-pulse 1.6s ease-in-out infinite; }
 .dots i:nth-child(2) { animation-delay: 0.2s; }
 .dots i:nth-child(3) { animation-delay: 0.4s; }
+
+/* A wrong passphrase: the field turns red, shakes once and shows a cross at its right end; the words come below it. */
+@keyframes w-shake { 0%, 100% { transform: none; } 15% { transform: translateX(-7px); } 35% { transform: translateX(6px); } 55% { transform: translateX(-4px); } 75% { transform: translateX(3px); } }
+.pw { position: relative; }
+.pw.bad { animation: w-shake 400ms var(--ease-move); }
+.pw.bad > input.field { border-color: var(--status-danger); background: var(--status-danger-soft); padding-right: 40px; }
+.pw.bad > input.field:focus-visible { outline-color: var(--status-danger); }
+.pw-x { position: absolute; right: 10px; top: 50%; translate: 0 -50%; display: grid; color: var(--status-danger); pointer-events: none; animation: w-pop-in var(--dur-base) var(--ease-out); }
+.pw-msg { margin: 6px 0 0; color: var(--status-danger); font-size: 14px; line-height: 20px; }

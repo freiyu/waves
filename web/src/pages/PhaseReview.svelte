@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { visible } from '../lib/text';
   import { toast } from 'svelte-sonner';
   import { app } from '../lib/app.svelte';
   import { resource } from '../lib/resource.svelte';
@@ -17,8 +18,11 @@
   import StepUpDialog from '../lib/StepUpDialog.svelte';
   import type { Column } from '../lib/table';
 
+  // The phase id comes from the project area (the awaiting phase), or from the address of the older standalone page.
+  let { phaseId }: { phaseId?: string } = $props();
+  const rid = $derived(phaseId ?? route.params.id!);
   const a = app();
-  const res = resource(() => a.api.phaseReview(route.params.id!), ['phase.changed', 'approval.changed']);
+  const res = resource(() => a.api.phaseReview(rid), ['phase.changed', 'approval.changed']);
   const apr = resource(async () => {
     const r = res.data;
     return r?.approval_id ? a.api.approval(r.approval_id) : null;
@@ -109,7 +113,7 @@
       <div class="stack-lg">
         <Panel level={3} title="Summary">
           <div class="pb stack">
-            <div>{r.summary}</div><div class="muted small">AI-generated, not verified.</div>
+            <div>{visible(r.summary)}</div><div class="muted small">AI-generated, not verified.</div>
             {#if r.recommendation}<div><b>Recommendation:</b> {r.recommendation}</div>{/if}
           </div>
         </Panel>
@@ -136,7 +140,7 @@
         needPassphrase={!a.elevationFor()}
         facts={[{ label: 'Phase', value: `${r.phase.code} ${r.phase.title}` }, { label: 'Tasks', value: r.tasks.filter((t) => reopenIds.includes(t.id)).map((t) => t.code).join(', ') }, { label: 'Reason', value: reopenReason.trim() }]}
         confirm="Reopen"
-        onconfirm={async (p) => { await a.runElevated(p, (secret) => a.api.reopenTasks(route.params.id!, reopenIds, reopenReason.trim(), secret)); reopening = false; reopened = true; reopenIds = []; reopenReason = ''; await res.reload(); }}
+        onconfirm={async (p) => { await a.runElevated(p, (secret) => a.api.reopenTasks(rid, reopenIds, reopenReason.trim(), secret)); reopening = false; reopened = true; reopenIds = []; reopenReason = ''; await res.reload(); }}
         oncancel={() => (reopening = false)}
       />
     {/if}
@@ -149,7 +153,7 @@
         needPassphrase={!a.elevationFor()}
         facts={[{ label: 'Validator', value: q.v.name }, { label: 'Item', value: q.v.items?.[q.i]?.text ?? '' }]}
         confirm="Confirm"
-        onconfirm={async (p) => { await a.runElevated(p, (secret) => a.api.confirmValidation(route.params.id!, q.v.id, q.i, secret)); asking = null; toast.success('Checklist item confirmed'); await res.reload(); }}
+        onconfirm={async (p) => { await a.runElevated(p, (secret) => a.api.confirmValidation(rid, q.v.id, q.i, secret)); asking = null; toast.success('Checklist item confirmed'); await res.reload(); }}
         oncancel={() => (asking = null)}
       />
     {/if}

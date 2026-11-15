@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,7 +76,7 @@ func TestDashboardOnTheRealService(t *testing.T) {
 	}
 	i := newInst(t)
 	i.setLimit(3)
-	_, _, gate := i.gateTarget("gate")
+	gp, _, gate := i.gateTarget("gate")
 	// A phase waiting for its review, so the dashboard's review page is walked on real data too.
 	rp, ra := i.planned("inreview")
 	ra.claim()
@@ -106,8 +107,17 @@ func TestDashboardOnTheRealService(t *testing.T) {
 	_, ba := i.planned("blocked")
 	ba.claim()
 	ba.must("waves_report_blocker", map[string]any{"reason": "rate limited"}, nil)
+	// A harness that stopped and waits for the human (the Stop hook), and a project marked as a fork of another.
+	xp, xa := i.planned("waiting")
+	xa.claim()
+	xs := "sess-" + xp.id
+	i.runHook(xp.installedHook(t), map[string]any{"session_id": xs, "cwd": xp.dir, "hook_event_name": "PreToolUse", "tool_name": "mcp__waves__waves_claim_task",
+		"tool_use_id": fmt.Sprintf("toolu_%s_%d", xp.id, xa.tool), "tool_input": map[string]any{}})
+	i.runHook(xp.installedSignal(t, "Stop"), map[string]any{"session_id": xs, "cwd": xp.dir, "hook_event_name": "Stop"})
+	cp := i.newProject("toconnect")
+	rp.dash.must("PATCH", "/projects/"+rp.id, map[string]string{"fork_of": xp.id}, nil)
 	iexe, _ := i.execOf(itask)
-	ids, _ := json.Marshal(map[string]string{"gate": gate, "workflow": wp.pending("workflow"), "interrupted": iexe})
+	ids, _ := json.Marshal(map[string]string{"gate": gate, "gateProject": gp.id, "workflow": wp.pending("workflow"), "workflowProject": wp.id, "interrupted": iexe, "fork": rp.id, "origin": xp.id, "connect": cp.id})
 	cmd := exec.Command("npx", "playwright", "test", "-c", "playwright.real.config.ts")
 	cmd.Dir = "../../web"
 	cmd.Env = append(os.Environ(), "WAVES_URL="+i.url(""), "WAVES_OPERATOR_TOKEN="+i.op, "WAVES_PASS="+testPass, "WAVES_IDS="+string(ids))

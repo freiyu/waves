@@ -137,6 +137,9 @@ func (v *pv) str(m map[string]any, path, key string, required bool, lo, hi int) 
 	if (required && strings.TrimSpace(s) == "") || n < lo || (hi > 0 && n > hi) {
 		v.add("schema", ptr(path, key), "must have %d to %d characters", max(lo, 1), hi)
 	}
+	if r, bad := UnsafeRune(s); bad {
+		v.add("schema", ptr(path, key), "contains a control or text-direction character (U+%04X); send plain text", r)
+	}
 	return s
 }
 
@@ -173,6 +176,9 @@ func (v *pv) strs(m map[string]any, path, key string) []string {
 		if !ok {
 			v.add("schema", ptr(ptr(path, key), i), "must be a string")
 			continue
+		}
+		if r, bad := UnsafeRune(s); bad {
+			v.add("schema", ptr(ptr(path, key), i), "contains a control or text-direction character (U+%04X); send plain text", r)
 		}
 		out = append(out, s)
 	}

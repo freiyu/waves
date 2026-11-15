@@ -20,9 +20,12 @@ curl -fsSL https://github.com/freiyu/waves/releases/latest/download/install.sh |
 waves version
 ```
 
-The script picks the binary for your CPU, checks it against `SHA256SUMS` and installs it to `~/.local/bin/waves`.
-It checks the download against `SHA256SUMS` from the same release, so it catches a damaged file, not a compromised release. It uses no sudo and changes nothing else. If you would rather read it first, download `install.sh`, read it, then
+The script picks the binary for your CPU, checks it against `SHA256SUMS` from the same release and installs it to
+`~/.local/bin/waves`. That catches a damaged download, not a compromised release. It uses no sudo and changes nothing else. If you would rather read it first, download `install.sh`, read it, then
 run `sh install.sh`. Options: `--version 1.0.0`, `--dir <folder>`, `--from <folder with the downloaded files>`.
+
+To update later, run `waves update`. It downloads the newest release, checks it against `SHA256SUMS`, keeps the old
+binary as `waves.previous` and restarts a running service. `waves start` can tell you when a newer release exists: it is off until you put `"update_check": true` in `config.json` (one request to GitHub, no background checks). See [backup, restore and upgrade](manual/backup-restore.md).
 
 From source:
 
@@ -50,7 +53,9 @@ your user can read.
 ## Your first workflow
 
 Register a project, add a requirement, ask for a plan, connect Claude Code, let it plan, then approve the plan,
-each phase and each result with your passphrase. The steps are in the [quick start](manual/quick-start.md).
+each phase and each result with your passphrase. In the dashboard a project has five tabs: Overview (phases, what waits
+for you, tasks), Requirements, Plan (the proposed workflow and its approval), Review (the phase review) and Guard (the
+Claude Code hook). The Graph shows every project and its phases on one canvas. The steps are in the [quick start](manual/quick-start.md).
 You can also decide from a terminal: `waves approval list`, then `waves approval review <id>`.
 
 ## Day to day
@@ -62,15 +67,17 @@ You can also decide from a terminal: `waves approval list`, then `waves approval
 | `waves execution list` / `waves execution logs <id> -f` | running and past agent work |
 | `waves approval list` | approvals waiting for you |
 | `waves guard enforce` | deny Claude Code's file-editing tools (Write, Edit, MultiEdit, NotebookEdit) without a lease, outside the task's workspace, or on protected files. The default policy `audit` only records. **Shell commands are not inspected while a task is leased.** Sessions Waves never saw are allowed unless the project's unmanaged-sessions setting is `deny`. Changing the policy asks for your passphrase |
+| `waves update` | replace the binary with the newest release (`--version X` for a specific one, `--from <folder>` for files you downloaded). Refuses while executions are running, and an older release, unless you pass `--force` |
 | `waves backup` | copy the database (`waves restore <file>` with the service stopped) |
 | `waves stop` | stop the service |
 
 ## When something goes wrong
 
-- **Needs attention** on the dashboard Overview lists everything waiting for you: approvals, blocked tasks,
-  failed or interrupted executions.
-- If an agent disconnects or Waves crashes, **nothing is rerun automatically**. Open the execution's
-  **Recovery** page and choose: Retry the task, Accept partial result, or Mark failed.
+- **Needs your decision** on the dashboard Overview lists the approvals waiting for you. **Needs attention** on the
+  Executions page lists interrupted, failed and waiting executions, each with its actions. An execution that shows
+  **Waiting for instruction** is a Claude Code session that stopped and waits for your answer in its own terminal.
+- If an agent disconnects or Waves crashes, **nothing is rerun automatically**. Open the execution on the
+  Executions page and choose: Retry the task, Accept partial result, or Mark failed.
   From a terminal: `waves execution cancel <id>`, then `waves task retry <task id> "<reason>"`.
 - Forgot the passphrase: stop the service and run `waves auth passphrase --reset` in a terminal.
 

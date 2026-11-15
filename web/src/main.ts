@@ -17,9 +17,10 @@ async function boot() {
     const scenario = new URLSearchParams(location.search).get('scenario') ?? '';
     const qs = new URLSearchParams(location.search);
     const mock = createMock({ scenario, latencyMs: Number(qs.get('latency') ?? 60), tickMs: Number(qs.get('tick') ?? 5000) });
-    deps = { transport: mock.transport, eventSource: mock.bus.factory };
-    // Connection controls for reviewing the Reconnecting and Stale states. Nothing else of the mock is reachable.
-    (window as unknown as Record<string, unknown>).__wavesMock = { drop: () => mock.bus.drop(), refuse: (on: boolean) => { mock.bus.refuse = on; if (on) mock.bus.drop(); } };
+    let calls = 0;
+    deps = { transport: (r: Parameters<typeof mock.transport>[0]) => (calls++, mock.transport(r)), eventSource: mock.bus.factory };
+    // Connection controls for reviewing the Reconnecting and Stale states, and a request counter for measuring. Nothing else of the mock is reachable.
+    (window as unknown as Record<string, unknown>).__wavesMock = { calls: () => calls, drop: () => mock.bus.drop(), refuse: (on: boolean) => { mock.bus.refuse = on; if (on) mock.bus.drop(); } };
   }
   const a = createApp(deps);
   setApp(a);

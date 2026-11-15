@@ -43,23 +43,22 @@
     if (!r.version_id) return;
     versionError = '';
     try {
-      const v = await a.api.newWorkflowVersion(r.version_id);
+      await a.api.newWorkflowVersion(r.version_id);
       toast.success('New workflow version created');
-      go('/workflow/' + v.id);
+      go(`/projects/${pid}/plan`);
     } catch (x) {
       versionError = x instanceof ApiError ? `${x.message} ${x.nextStep}` : String(x);
     }
   }
 </script>
 
-<ProjectHead id={pid} current="requirements">
-  {#snippet actions()}<Btn kind="pri" onclick={() => (adding = true)}><Icon name="plus" size={14} />Add requirement</Btn>{/snippet}
-</ProjectHead>
+<ProjectHead id={pid} current="requirements" />
 <View {res} label="requirements">
   {#snippet children(d)}
     {@const sel = d.items.find((x) => x.id === pick) ?? d.items.find((x) => x.state === 'changed') ?? d.items[0]}
     <div class="cols">
       <Panel title="Sources" count={d.items.length}>
+        {#snippet right()}<Btn kind="pri" sm onclick={() => (adding = true)}><Icon name="plus" size={14} />Add requirement</Btn>{/snippet}
         <ul class="items" aria-label="Requirement sources">
           {#each d.items as r (r.id)}
             <li>

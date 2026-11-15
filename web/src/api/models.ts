@@ -15,6 +15,7 @@ export type AuditStatus = S['ContractAuditStatus'];
 export type AuditRecord = S['ContractAuditRecord'];
 export type AuditList = S['ContractAuditList'];
 export type Project = S['ContractProject'];
+export type GraphLayout = S['ContractGraphLayout'];
 export type ProjectDetail = S['ContractProjectDetail'];
 export type PhaseRef = S['ContractPhaseRef'];
 export type TaskSummary = S['ContractTaskSummary'];

@@ -24,5 +24,5 @@
     {/each}
     <span class="tab-line pointer-events-none absolute bottom-0 left-0 h-0.5 w-px bg-primary" style="transform: translateX({x}px) scaleX({w}); {ready ? '' : 'transition: none'}" aria-hidden="true"></span>
   </Tabs.List>
-  <Tabs.Content value={active} class="outline-none">{@render children(active)}</Tabs.Content>
+  <Tabs.Content value={active}>{@render children(active)}</Tabs.Content>
 </Tabs.Root>

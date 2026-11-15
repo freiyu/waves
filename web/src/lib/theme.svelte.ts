@@ -12,9 +12,22 @@ function read(): Theme {
 
 export const theme = $state({ value: read() });
 
-export function applyTheme() {
-  if (theme.value === 'system') delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = theme.value;
+export function applyTheme(animate = false) {
+  const set = () => {
+    if (theme.value === 'system') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme.value;
+  };
+  if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return set();
+  // A cross-fade of the whole page (no flash of the other palette); browsers without view transitions fade the colours instead.
+  const d = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+  if (d.startViewTransition) {
+    d.startViewTransition(set);
+    return;
+  }
+  const root = document.documentElement;
+  root.classList.add('theme-fade');
+  set();
+  setTimeout(() => root.classList.remove('theme-fade'), 450);
 }
 
 export function cycleTheme() {
@@ -25,7 +38,7 @@ export function cycleTheme() {
   } catch {
     /* ignore */
   }
-  applyTheme();
+  applyTheme(true);
 }
 
 export function setTheme(v: Theme) {
@@ -36,5 +49,5 @@ export function setTheme(v: Theme) {
   } catch {
     /* ignore */
   }
-  applyTheme();
+  applyTheme(true);
 }

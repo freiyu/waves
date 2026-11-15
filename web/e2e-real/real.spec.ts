@@ -40,32 +40,34 @@ test('a used sign-in link does not work twice', async ({ page, browser }) => {
   await expect(other.getByText('This link was already used or has expired.')).toBeVisible();
 });
 
-test('needs-attention shows the gate, the blocked task and the interrupted execution', async ({ page }) => {
+test('the decisions and the stopped work are on the pages that own them', async ({ page }) => {
   await signIn(page);
+  // Overview: what waits for the human's decision, with the gate among it.
+  await expect(page.getByRole('region', { name: 'Needs your decision' })).toContainText('Phase Start');
+  // Executions: the interrupted execution, with the actions that get it out of recovery.
+  await page.goto('/#/executions');
   const attn = page.getByRole('list', { name: 'Needs attention' });
-  await expect(attn).toContainText('Phase Start');
   await expect(attn).toContainText('Interrupted');
-  await expect(attn).toContainText('Blocked');
+  await expect(attn.getByRole('button', { name: /Resolve|Resume|Retry/ }).first()).toBeVisible();
 });
 
 test('a phase start gate is approved with the passphrase', async ({ page }) => {
   await signIn(page);
-  await page.goto(`/#/approvals/${IDS.gate}`);
-  await page.getByRole('button', { name: 'Approve' }).click();
+  await page.goto(`/#/projects/${IDS.gateProject}`);
+  await page.getByRole('button', { name: /^Approve/ }).click();
   const dlg = page.getByRole('dialog');
   await dlg.getByLabel('Approval passphrase').fill('wrong passphrase here');
   await dlg.getByRole('button', { name: 'Approve' }).click();
   await expect(dlg.getByText('Wrong passphrase.')).toBeVisible();
   await passphrase(page, 'Approve');
-  await expect(page.getByText('Decided:')).toBeVisible();
-  await expect(page.getByText('approved').first()).toBeVisible();
+  await expect(page.getByText('Approval recorded')).toBeVisible();
   const leaked = await page.evaluate((p) => JSON.stringify([localStorage, sessionStorage, location.href, document.cookie]).includes(p), PASS);
   expect(leaked).toBe(false);
 });
 
 test('a workflow is rejected with feedback', async ({ page }) => {
   await signIn(page);
-  await page.goto(`/#/approvals/${IDS.workflow}`);
+  await page.goto(`/#/projects/${IDS.workflowProject}/plan`);
   await page.getByRole('button', { name: 'Reject with feedback' }).click();
   const dlg = page.getByRole('dialog');
   await dlg.getByLabel('Feedback (required)').fill('Split the greeting task in two.');
@@ -73,8 +75,7 @@ test('a workflow is rejected with feedback', async ({ page }) => {
   await expect(dlg.getByLabel('Approval passphrase')).toBeVisible();
   await passphrase(page, /Reject/);
   await expect(dlg).toBeHidden();
-  await expect(page.getByText('Decided:')).toBeVisible();
-  await expect(page.getByText('rejected').first()).toBeVisible();
+  await expect(page.getByText('Rejection recorded')).toBeVisible();
 });
 
 test('an interrupted execution is resolved by the human, never on its own', async ({ page }) => {

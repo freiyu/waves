@@ -24,6 +24,7 @@ var settingDefaults = map[string]int{
 	"log_retention_days":   14,
 	"log_max_mb":           50,
 	"session_ttl_h":        12,
+	"waiting_max_h":        8,
 }
 
 var settingRange = map[string][2]int{
@@ -31,9 +32,10 @@ var settingRange = map[string][2]int{
 	"max_concurrent":       {1, 0}, // upper bound is hard_cap
 	"heartbeat_interval_s": {15, 300},
 	"log_retention_days":   {1, 365},
+	"waiting_max_h":        {1, 72},
 }
 
-var securityKeys = map[string]bool{"elevation_window_min": true, "max_concurrent": true}
+var securityKeys = map[string]bool{"elevation_window_min": true, "max_concurrent": true, "waiting_max_h": true}
 
 func (s *Service) settingInt(ctx context.Context, key string) int {
 	var v string

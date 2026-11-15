@@ -25,6 +25,7 @@ Service:
   start | stop | status  run in the background, stop it, show what needs you
   open                   print a one-time sign-in link for the dashboard (valid 60 s)
   doctor                 check the environment, database and audit chain
+  update                 replace this binary with the newest release; waves update -h lists the options
 
 Work:
   project list | add <path> | switch <name> | remove <name>

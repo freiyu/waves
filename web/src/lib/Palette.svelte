@@ -11,9 +11,9 @@
   const { status, projects } = shellData();
 
   const PAGES: Array<{ label: string; path: string; icon: IconName }> = [
-    { label: 'Overview', path: '/', icon: 'home' },
+    { label: 'Overview', path: '/', icon: 'overview' },
+    { label: 'Graph', path: '/graph', icon: 'graph' },
     { label: 'Projects', path: '/projects', icon: 'folder' },
-    { label: 'Approvals', path: '/approvals', icon: 'inbox' },
     { label: 'Executions', path: '/executions', icon: 'exec' },
     { label: 'Harnesses', path: '/harnesses', icon: 'plug' },
     { label: 'Activity', path: '/activity', icon: 'log' },
@@ -21,7 +21,7 @@
   ];
   const attention = $derived(
     (status.data?.needs_attention ?? []).flatMap((i) =>
-      i.ref_type === 'approval' ? [{ label: `${i.label}: ${i.subject}`, path: '/approvals/' + i.ref_id, icon: 'wait' as IconName, hint: 'Opens the approval' }]
+      i.ref_type === 'approval' ? [{ label: `${i.label}: ${i.subject}`, path: '/projects/' + i.project_id, icon: 'wait' as IconName, hint: 'Opens the project that asks' }]
       : i.ref_type === 'execution' ? [{ label: `${i.label}: ${i.subject}`, path: '/executions/' + i.ref_id, icon: 'run' as IconName, hint: 'Opens the execution' }] : [],
     ),
   );

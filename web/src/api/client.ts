@@ -1,6 +1,8 @@
 import type { paths } from './types';
 import type { ErrorBody } from './models';
 import type { Method, Transport } from './transport';
+import { fromWire, type ForkLink, type GraphLayout } from './ext';
+
 
 type Ok = 200 | 201 | 202 | 204;
 type Body<R> = R extends { content: { 'application/json': infer B } }
@@ -99,7 +101,7 @@ export function createClient(transport: Transport, session: Session) {
     backup: () => call('post', '/backup'),
 
     projects: () => call('get', '/projects', list<'/projects'>({ limit: 200 })),
-    registerProject: (path: string, name?: string) => call('post', '/projects', { body: { path, name } }),
+    registerProject: (path: string, name?: string, forkOf?: string) => call('post', '/projects', { body: { path, name, fork_of: forkOf } }),
     project: (id: string) => call('get', '/projects/{id}', { path: { id } }),
     activateProject: (id: string) => call('post', '/projects/{id}/activate', { path: { id } }),
     settings: () => call('get', '/settings'),
@@ -144,6 +146,19 @@ export function createClient(transport: Transport, session: Session) {
     connect: (id: string, planHash: string, elevation?: string) =>
       call('post', '/projects/{id}/agent/connect', { path: { id }, body: { plan_hash: planHash }, elevation }),
     revokeElevation: (secret: string) => call('post', '/auth/stepup/revoke', { elevation: secret }),
+    /** Views over contract data for the redesigned pages. */
+    x: {
+      /** Projects registered as forks of another project. */
+      forks: async (): Promise<{ items: ForkLink[] }> => {
+        const l = await call('get', '/projects', list<'/projects'>({ limit: 200 }));
+        return { items: l.items.filter((p) => p.fork_of).map((p) => ({ project_id: p.id, fork_of: p.fork_of! })) };
+      },
+      positions: async (): Promise<GraphLayout> => fromWire(await call('get', '/graph-layout', {})),
+      savePositions: async (p: GraphLayout) => {
+        await call('put', '/graph-layout', { body: p });
+      },
+      setFork: (id: string, forkOf: string) => call('patch', '/projects/{id}', { path: { id }, body: { fork_of: forkOf } }),
+    },
   };
 }
 

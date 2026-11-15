@@ -24,7 +24,7 @@ test('every reachable page loads with real data and no errors', async ({ page })
   page.on('console', (m) => { if (m.type() === 'error') problems.push(`${at}: console ${m.text()}`); });
   page.on('response', (r) => { if (r.url().includes('/api/') && r.status() >= 400) problems.push(`${at}: ${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`); });
 
-  const queue = ['#/', '#/projects', '#/approvals', '#/executions', '#/harnesses', '#/activity', '#/settings'];
+  const queue = ['#/', '#/projects', '#/executions', '#/harnesses', '#/activity', '#/settings'];
   const seen = new Set<string>();
   while (queue.length && seen.size < 60) {
     const h = queue.shift()!;
@@ -47,7 +47,7 @@ test('every reachable page loads with real data and no errors', async ({ page })
   expect(seen.size).toBeGreaterThan(12);
   // The pages most likely to break must really have been walked, not just exist as links.
   const walked = [...seen];
-  for (const [name, re] of [['phase review', /^#\/phases\/[^/]+\/review$/], ['workflow review', /^#\/workflow\//], ['requirements', /^#\/projects\/[^/]+\/requirements$/], ['plan', /^#\/projects\/[^/]+\/plan$/], ['recovery', /^#\/executions\/[^/]+\/recovery$/], ['approval detail', /^#\/approvals\/[^/]+$/]] as const) {
+  for (const [name, re] of [['phase review', /^#\/phases\/[^/]+\/review$/], ['requirements', /^#\/projects\/[^/]+\/requirements$/], ['plan', /^#\/projects\/[^/]+\/plan$/], ['recovery', /^#\/executions\/[^/]+\/recovery$/], ['guard pane', /^#\/projects\/[^/]+\/guard$/]] as const) {
     expect(walked.some((h) => re.test(h)), `the sweep never reached ${name}`).toBe(true);
   }
 });

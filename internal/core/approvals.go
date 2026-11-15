@@ -149,7 +149,11 @@ func (s *Service) Decide(ctx context.Context, p Principal, d Decision) error {
 			return errValidation("Rejecting needs feedback.", "Say what must change.")
 		}
 		if d.Decision == "approve" && cat == "phase_completion" {
-			if needs, _ := s.reviewNeedsOverride(ctx, t, sid); needs && strings.TrimSpace(d.Override) == "" {
+			needs, err := s.reviewNeedsOverride(ctx, t, sid)
+			if err != nil {
+				return wrap(err, "check whether the review needs an override")
+			}
+			if needs && strings.TrimSpace(d.Override) == "" {
 				return errValidation("A failed or unconfirmed validator needs a written reason to approve.", "Write the override reason.")
 			}
 		}

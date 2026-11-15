@@ -838,6 +838,62 @@
         }
       }
     },
+    "/graph-layout": {
+      "get": {
+        "summary": "The saved arrangement of the Graph page",
+        "description": "Scope: op",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractGraphLayout"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save the arrangement of the Graph page",
+        "description": "Scope: op",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractGraphLayout"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/harnesses": {
       "get": {
         "summary": "Harnesses and capabilities",
@@ -1143,6 +1199,51 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ContractProjectDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Set or clear the fork label of a project",
+        "description": "Scope: op",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractSetProjectForkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractProject"
                 }
               }
             }
@@ -2884,6 +2985,13 @@
           "usage": {
             "$ref": "#/components/schemas/ContractUsage"
           },
+          "waiting_since": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "workspace_locked": {
             "type": "boolean"
           },
@@ -3006,6 +3114,13 @@
           },
           "task_title": {
             "type": "string"
+          },
+          "waiting_since": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "required": [
@@ -3041,6 +3156,89 @@
           "kind",
           "path",
           "detail"
+        ],
+        "type": "object"
+      },
+      "ContractGraphLayout": {
+        "properties": {
+          "lines": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ContractGraphLine"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "nodes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ContractGraphNodePos"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "nodes",
+          "lines"
+        ],
+        "type": "object"
+      },
+      "ContractGraphLine": {
+        "properties": {
+          "fo": {
+            "type": [
+              "null",
+              "number"
+            ]
+          },
+          "from": {
+            "enum": [
+              "top",
+              "right",
+              "bottom",
+              "left"
+            ],
+            "type": "string"
+          },
+          "to": {
+            "enum": [
+              "top",
+              "right",
+              "bottom",
+              "left"
+            ],
+            "type": "string"
+          },
+          "tt": {
+            "type": [
+              "null",
+              "number"
+            ]
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "ContractGraphNodePos": {
+        "properties": {
+          "x": {
+            "format": "double",
+            "type": "number"
+          },
+          "y": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y"
         ],
         "type": "object"
       },
@@ -3123,6 +3321,9 @@
             ],
             "type": "string"
           },
+          "waiting_hooks": {
+            "type": "boolean"
+          },
           "would_deny_24h": {
             "type": "integer"
           }
@@ -3130,6 +3331,7 @@
         "required": [
           "policy",
           "installed",
+          "waiting_hooks",
           "would_deny_24h",
           "not_defended",
           "unmanaged_sessions"
@@ -3356,6 +3558,12 @@
               "null",
               "integer"
             ]
+          },
+          "waiting_max_h": {
+            "type": [
+              "null",
+              "integer"
+            ]
           }
         },
         "type": "object"
@@ -3517,6 +3725,9 @@
           "failed_executions": {
             "type": "integer"
           },
+          "fork_of": {
+            "type": "string"
+          },
           "guard_policy": {
             "enum": [
               "off",
@@ -3584,6 +3795,9 @@
           },
           "failed_executions": {
             "type": "integer"
+          },
+          "fork_of": {
+            "type": "string"
           },
           "guard_policy": {
             "enum": [
@@ -3794,6 +4008,9 @@
       },
       "ContractRegisterProjectRequest": {
         "properties": {
+          "fork_of": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -4003,6 +4220,17 @@
         ],
         "type": "object"
       },
+      "ContractSetProjectForkRequest": {
+        "properties": {
+          "fork_of": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fork_of"
+        ],
+        "type": "object"
+      },
       "ContractSettings": {
         "properties": {
           "elevation_window_min": {
@@ -4044,6 +4272,9 @@
           },
           "session_ttl_h": {
             "type": "integer"
+          },
+          "waiting_max_h": {
+            "type": "integer"
           }
         },
         "required": [
@@ -4056,7 +4287,8 @@
           "heartbeat_interval_s",
           "log_retention_days",
           "log_max_mb",
-          "session_ttl_h"
+          "session_ttl_h",
+          "waiting_max_h"
         ],
         "type": "object"
       },

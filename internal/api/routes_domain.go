@@ -13,6 +13,9 @@ func (s *Server) domainHandlers() map[string]handler {
 	return map[string]handler{
 		"GET /projects":                                   s.projects,
 		"POST /projects":                                  s.registerProject,
+		"PATCH /projects/{id}":                            s.patchProject,
+		"GET /graph-layout":                               s.graphLayout,
+		"PUT /graph-layout":                               s.putGraphLayout,
 		"GET /projects/{id}":                              s.projectDetail,
 		"POST /projects/{id}/activate":                    s.activateProject,
 		"GET /projects/{id}/requirements":                 s.requirements,
@@ -44,7 +47,7 @@ func (s *Server) registerProject(w http.ResponseWriter, r *http.Request, p core.
 	if err := decode(r, &req); err != nil {
 		return err
 	}
-	id, err := s.core.RegisterProject(r.Context(), p, req.Path, req.Name)
+	id, err := s.core.RegisterProjectFork(r.Context(), p, req.Path, req.Name, req.ForkOf)
 	if err != nil {
 		return err
 	}
@@ -239,4 +242,38 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request, p core.Principal
 		return err
 	}
 	return s.approval(w, r, p)
+}
+
+func (s *Server) patchProject(w http.ResponseWriter, r *http.Request, p core.Principal) error {
+	var req struct {
+		ForkOf *string `json:"fork_of"`
+	}
+	if err := decode(r, &req); err != nil {
+		return err
+	}
+	if req.ForkOf == nil { // an empty body must not silently clear a label
+		return &core.Error{Status: http.StatusUnprocessableEntity, Code: "validation_failed", Message: "fork_of is required.", NextStep: "Send the project id, or an empty string to clear the label."}
+	}
+	if err := s.core.SetProjectFork(r.Context(), p, r.PathValue("id"), *req.ForkOf); err != nil {
+		return err
+	}
+	pr, err := s.core.Project(r.Context(), r.PathValue("id"))
+	return jsonOr(w, 200, pr, err)
+}
+
+func (s *Server) graphLayout(w http.ResponseWriter, r *http.Request, _ core.Principal) error {
+	l, err := s.core.GraphLayout(r.Context())
+	return jsonOr(w, 200, l, err)
+}
+
+func (s *Server) putGraphLayout(w http.ResponseWriter, r *http.Request, p core.Principal) error {
+	var l contract.GraphLayout
+	if err := decode(r, &l); err != nil {
+		return err
+	}
+	if err := s.core.SetGraphLayout(r.Context(), p, l); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
 }

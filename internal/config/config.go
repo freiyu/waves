@@ -67,6 +67,8 @@ func (d Dirs) Artifacts() string     { return filepath.Join(d.Data, "artifacts")
 // File is the on-disk configuration. Unknown keys are refused.
 type File struct {
 	Port int `json:"port"`
+	// UpdateCheck lets `waves start` ask GitHub whether a newer release exists. Off unless the user turns it on.
+	UpdateCheck bool `json:"update_check,omitempty"`
 }
 
 // Load reads config.json; a missing file gives the defaults.

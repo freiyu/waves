@@ -96,7 +96,7 @@ func TestConnectWritesOnlyProjectFilesAndReverts(t *testing.T) {
 		t.Fatalf("settings: %s %v", b, err)
 	}
 	m, _ := os.ReadFile(filepath.Join(a.root, ".mcp.json"))
-	if !strings.Contains(string(m), `"--project"`) || strings.Contains(string(m), "wmp_") {
+	if !strings.Contains(string(m), `"--project"`) || strings.Contains(string(m), "wmp_") { // guard:allow fake test fixture: the prefix of a token, checked to be absent
 		t.Fatalf(".mcp.json must name the project and hold no secret: %s", m)
 	}
 	if st, _ := os.Stat(a.s.mcpTokenPath(a.project)); st.Mode().Perm() != 0o600 {

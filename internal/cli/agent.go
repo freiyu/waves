@@ -24,6 +24,9 @@ const hookTimeout = 500 * time.Millisecond
 // hook is the Claude Code PreToolUse entry point. Exit 0 allows, exit 2
 // denies. Under enforce, every failure denies; under audit, nothing blocks.
 func (e *Env) hook(ctx context.Context, args []string) (err error) {
+	if len(args) == 2 && args[0] == "--signal" {
+		return e.hookSignal(ctx, args[1])
+	}
 	policy := "enforce"
 	if len(args) == 2 && args[0] == "--policy" {
 		policy = args[1]
@@ -87,6 +90,44 @@ func (e *Env) hook(ctx context.Context, args []string) (err error) {
 		return exitCode(2)
 	}
 	return fail("unknown decision")
+}
+
+// hookSignal is the Stop and UserPromptSubmit entry point. It only tells Waves that a turn ended or began; it never
+// decides anything, never blocks (always exit 0, nothing on stdout) and never waits long, so it cannot hold up Claude Code.
+func (e *Env) hookSignal(ctx context.Context, event string) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = nil // exit 2 on a Stop hook would make Claude Code keep going
+		}
+	}()
+	if event != "stop" && event != "prompt" && event != "end" {
+		return nil
+	}
+	body, rerr := io.ReadAll(io.LimitReader(e.In, 1<<20+1))
+	if rerr != nil || len(body) > 1<<20 {
+		return nil
+	}
+	var in struct {
+		SessionID string `json:"session_id"`
+	}
+	if json.Unmarshal(body, &in) != nil || in.SessionID == "" {
+		return nil
+	}
+	cfg, cerr := config.Load(e.Dirs)
+	tok, terr := config.ReadSecret(e.Dirs.GuardToken())
+	if cerr != nil || terr != nil {
+		return nil
+	}
+	out, _ := json.Marshal(map[string]string{"session_id": in.SessionID, "event": event})
+	c, cancel := context.WithTimeout(ctx, hookTimeout)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(c, "POST", "http://"+cfg.Addr()+"/api/v1/guard/signal", bytes.NewReader(out))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	if res, err := http.DefaultClient.Do(req); err == nil {
+		res.Body.Close()
+	}
+	return nil
 }
 
 // mcpBridge runs the stdio MCP bridge for one project.

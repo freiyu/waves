@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -66,13 +67,29 @@ type inst struct {
 	logf  *os.File
 }
 
+// portsGiven remembers every port handed out in this run: the kernel may give a port that was just released to the next caller, and
+// two instances on one port made a test talk to the other test's service (a 401 on its own operator token).
+var (
+	portMu     sync.Mutex
+	portsGiven = map[int]bool{}
+)
+
 func freePort(t *testing.T) int {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	for {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := l.Addr().(*net.TCPAddr).Port
+		l.Close()
+		portMu.Lock()
+		fresh := !portsGiven[p]
+		portsGiven[p] = true
+		portMu.Unlock()
+		if fresh {
+			return p
+		}
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
 }
 
 // newInst runs `waves setup` on a pseudo-terminal and starts the service.
@@ -134,7 +151,7 @@ func (i *inst) start() {
 	for time.Now().Before(deadline) {
 		if res, err := http.Get(i.url("/api/v1/health")); err == nil {
 			res.Body.Close()
-			if res.StatusCode == 200 {
+			if res.StatusCode == 200 && i.ours() {
 				return
 			}
 		}
@@ -145,6 +162,22 @@ func (i *inst) start() {
 		}
 	}
 	i.t.Fatalf("waves serve did not answer in 10 s\n%s", i.log())
+}
+
+// ours is true when the service that answers on the port accepts this instance's operator token (and not only answers health):
+// a service of another test on the same port would refuse it.
+func (i *inst) ours() bool {
+	if i.op == "" {
+		return true
+	}
+	req, _ := http.NewRequest("GET", i.url("/api/v1/status"), nil)
+	req.Header.Set("Authorization", "Bearer "+i.op)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	res.Body.Close()
+	return res.StatusCode == 200
 }
 
 // kill9 ends the service the hard way, as a crash would.

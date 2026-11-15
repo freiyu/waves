@@ -27,7 +27,14 @@
   --color-st-warning-soft: var(--status-warning-soft);
   --color-st-neutral: var(--status-neutral);
   --color-st-neutral-soft: var(--status-neutral-soft);
+  --color-st-waiting: var(--status-waiting);
+  --color-st-waiting-soft: var(--status-waiting-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-canvas: var(--canvas);
+  --color-canvas-dot: var(--canvas-dot);
+  --color-scrim: var(--scrim);
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  --radius-card: 10px;
+  --radius-card: 14px;
 }

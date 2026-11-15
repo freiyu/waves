@@ -138,6 +138,12 @@ func (s *Service) transition(ctx context.Context, t *Tx, entity, id, to string, 
 		if to == "Completed" || to == "Failed" || to == "Cancelled" {
 			q, args = q+`, ended_at = ?`, append(args, now)
 		}
+		// Any move away from Running ends a wait: it was only ever a note on a running execution.
+		if to != "Running" {
+			if _, err := endWait(ctx, t, now, id, "state_changed"); err != nil {
+				return "", err
+			}
+		}
 	}
 	if _, err := t.ExecContext(ctx, q+` WHERE id = ?`, append(args, id)...); err != nil {
 		return "", wrap(err, "update %s state", entity)

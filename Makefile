@@ -61,4 +61,4 @@ clean:
 # The embedded bundle must talk to the real service: no mock adapter, fixture secret or test hook in it.
 check-release:
 	test -f web/dist/index.html
-	! grep -rlE 'mock-passphrase|__wavesMock|link-valid-demo' web/dist
+	! grep -rlE 'mock-passphrase|__wavesMock|link-valid-demo|createMock|MockBus' web/dist

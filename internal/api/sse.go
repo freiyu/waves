@@ -15,7 +15,7 @@ const pingEvery = 25 * time.Second
 
 // events streams server-sent events. The request goroutine owns the loop; it
 // ends when the client goes away, the bus drops the client, or the server stops.
-func (s *Server) events(w http.ResponseWriter, r *http.Request, _ core.Principal) error {
+func (s *Server) events(w http.ResponseWriter, r *http.Request, p core.Principal) error {
 	fl, ok := w.(http.Flusher)
 	if !ok {
 		return &core.Error{Status: http.StatusInternalServerError, Code: "unsupported", Message: "Streaming is not available."}
@@ -31,7 +31,21 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request, _ core.Principal
 	h.Set("Cache-Control", "no-store")
 	h.Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
+	// A dashboard stream ends when its session does (logout, expiry): re-checked at most every 5 s while events flow and on every ping.
+	cookie, _ := r.Cookie(cookieName)
+	var checked = time.Now()
+	alive := func() bool {
+		if p.Kind != core.KindSession || cookie == nil {
+			return true
+		}
+		checked = time.Now()
+		_, _, ok := s.core.Session(r.Context(), cookie.Value, p.Source)
+		return ok
+	}
 	send := func(ev events.Event) bool {
+		if time.Since(checked) > 5*time.Second && !alive() {
+			return false
+		}
 		_, err := fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", ev.ID, ev.Name, ev.Data)
 		return err == nil
 	}
@@ -61,6 +75,9 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request, _ core.Principal
 			}
 			fl.Flush()
 		case <-ping.C:
+			if !alive() {
+				return nil
+			}
 			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
 				return nil
 			}

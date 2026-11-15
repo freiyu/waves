@@ -37,13 +37,38 @@ acknowledge it.
 
 ## Upgrade
 
-1. Install the new binary over the old one (`install.sh` again, or copy the file).
-2. `waves stop`, then `waves start`.
+Run `waves update`. It downloads the newest release from GitHub, checks the file against the `SHA256SUMS` of the
+same release, and only then replaces the binary. The old binary stays next to it as `waves.previous` (an earlier
+`waves.previous` is replaced). If the service was started with `waves start`, Waves stops it and starts the new
+version for you, and puts the old binary back if the new one does not come up. It refuses, and changes nothing:
+
+- while executions are running, or when it cannot tell (an update interrupts them, and an interrupted task is never
+  run again by itself): finish or cancel them, or pass `--force`;
+- when a service answers on the port that `waves start` did not start: stop that service yourself first;
+- for an older release: it can refuse to start on a database a newer version has migrated. Make a copy with
+  `waves backup`, then pass `--force`.
+
+The network is used only while a command runs: nothing checks for updates in the background, and `waves start` does not
+either unless you ask it to. To get a notice, put `"update_check": true` in `~/.config/waves/config.json` (for example
+`{"port": 7317, "update_check": true}`). From then on `waves start` asks GitHub once whether a newer release exists and prints
+`Version X is online, update waves ...` when there is one. The request is for the release page of this project. GitHub sees your IP
+address and the page you asked for, and anyone on the network path can see your IP address and that you looked up github.com.
+It carries a generic `waves` User-Agent and no version or name, and `HTTPS_PROXY` and similar variables are honored. It has a 2
+second limit, so the command can finish up to 2 seconds after the service is up; a failure prints nothing.
+Version 1.0.0 has no `waves update` and no such notice: to leave 1.0.0, run `install.sh` again. If you ever go back to 1.0.0
+after setting `update_check`, delete that line from `config.json` first: 1.0.0 refuses a config file with a key it does not know.
+
+- `waves update --version 1.0.1` installs that release.
+- `waves update --from <folder>` uses `waves-linux-<arch>` and `SHA256SUMS` you downloaded yourself.
+- The checksum catches a damaged download, not a compromised release: both files come from the same place.
+- To install by hand instead: `install.sh` again (or copy the file), `waves stop`, `waves start`.
 
 On the first start a newer version applies its database migrations. Before it changes anything it writes a
 copy next to the database, `waves.db.pre-v<N>-<time>.bak`. Your projects, workflows, approvals and audit log are
 kept. Running an **older** binary on a database from a newer one is refused, so you cannot damage it by going
-back by mistake. To go back, restore a backup made before the upgrade.
+back by mistake. To go back after the new version has started: `waves stop`, move `waves.previous` over `waves`,
+`waves restore <waves.db.pre-v<N>-<time>.bak>` (the file next to `waves.db`), `waves start`. Everything done since
+the upgrade is lost. Before the new version has started for the first time, moving `waves.previous` back is enough.
 
 ## Housekeeping
 

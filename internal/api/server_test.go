@@ -230,7 +230,7 @@ func TestNonOperatorCredentialsAreRefused(t *testing.T) {
 	if n != 5 {
 		t.Fatalf("bypass attempts audited = %d, want 5", n)
 	}
-	if res, _ := h.do(req{method: "GET", path: "/api/v1/status", bearer: "wop_forged"}); res.StatusCode != 401 {
+	if res, _ := h.do(req{method: "GET", path: "/api/v1/status", bearer: "wop_forged"}); res.StatusCode != 401 { // guard:allow fake test fixture
 		t.Fatalf("forged token: %d", res.StatusCode)
 	}
 }

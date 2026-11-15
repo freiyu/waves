@@ -31,6 +31,18 @@ under `enforce` and fails closed. New projects start in `audit`, which blocks no
 shell commands are not inspected**, so an agent can change files outside its workspace through the shell. The hook
 lowers the chance of an agent touching files outside its task. It is **not a sandbox**.
 
+The signal hooks installed next to it (`Stop`, `UserPromptSubmit`, `SessionEnd`) only report. They use the guard token,
+never block Claude Code (they always exit 0), and can only mark a leased session as waiting or renew its lease. A waiting
+task keeps its lease, workspace lock and slot, and the longest wait (Settings, **Longest wait for instruction**) needs your
+passphrase to change. Anything that holds the guard token and knows a session id can do the same for that session; that is
+inside what is not defended below.
+
+Text that an agent writes for you to decide on (validator commands, titles, risky-action text, result summaries) is
+refused if it contains escape, carriage-return, text-direction or zero-width characters, and stored text is shown with
+such characters spelled out, for example `\u{202E}` for a text-direction override, so what you read is what is stored.
+Progress lines, release reasons and artifact names are stored the same way. A read-only task whose workspace changed, or
+cannot be checked, has its result reviewed like any other.
+
 Waves compares the hook in your project with the one it installed. A hook that is missing, switched off
 (`disableAllHooks`) or edited shows as not installed in `waves doctor`, `waves guard status` and as a red notice on
 the Guard tab of the Harnesses page. That is detection after the fact, not prevention: while a task is leased an
@@ -41,7 +53,8 @@ file, its `env` setting, other settings files, or `.mcp.json`. Changes to the tw
 ## Not defended
 
 **A process running as your user with unrestricted file or `ptrace` access can
-tamper with Waves directly**. It can edit the database, read process memory, read the token files, or log
+tamper with Waves directly**. It can replace the `waves` binary (the guard hook is that binary; `waves update --from`
+does the same with a file of its choosing), edit the database, read process memory, read the token files, or log
 keystrokes, including the passphrase. The audit chain can detect some of that after the fact; Waves does not
 prevent it.
 

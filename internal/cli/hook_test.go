@@ -95,3 +95,55 @@ func TestHookExitCodes(t *testing.T) {
 		t.Fatalf("missing token: exit %d", got)
 	}
 }
+
+// The Stop and UserPromptSubmit hooks only report. Whatever happens they exit 0 and print nothing, so they can never
+// hold up or block Claude Code.
+func TestSignalHookNeverBlocksAndOnlyReports(t *testing.T) {
+	var got struct {
+		path, auth, body string
+	}
+	e, stop := hookEnv(t, func(w http.ResponseWriter, r *http.Request) {
+		b := new(bytes.Buffer)
+		b.ReadFrom(r.Body)
+		got.path, got.auth, got.body = r.URL.Path, r.Header.Get("Authorization"), b.String()
+		w.WriteHeader(204)
+	})
+	defer stop()
+	if err := e.hook(context.Background(), []string{"--signal", "stop"}); err != nil {
+		t.Fatalf("signal hook: %v", err)
+	}
+	if got.path != "/api/v1/guard/signal" || got.auth != "Bearer wgd_test" || got.body != `{"event":"stop","session_id":"s"}` { // guard:allow fake test fixture
+		t.Fatalf("request: %+v", got)
+	}
+	if e.Out.(*bytes.Buffer).Len()+e.Err.(*bytes.Buffer).Len() != 0 {
+		t.Fatal("the signal hook printed something")
+	}
+	got.path = ""
+	e.In.Seek(0, 0) // the event is read once per hook run
+	if err := e.hook(context.Background(), []string{"--signal", "end"}); err != nil || got.path != "/api/v1/guard/signal" {
+		t.Fatalf("session end: %v %q", err, got.path)
+	}
+	// An event name Waves does not know sends nothing.
+	got.path = ""
+	if err := e.hook(context.Background(), []string{"--signal", "approve"}); err != nil || got.path != "" {
+		t.Fatalf("unknown event: %v %q", err, got.path)
+	}
+	// A service that is down, or answers with an error, never turns into a failure.
+	e2, stop2 := hookEnv(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(500) })
+	if err := e2.hook(context.Background(), []string{"--signal", "prompt"}); err != nil {
+		t.Fatalf("service error: %v", err)
+	}
+	stop2()
+	e3, stop3 := hookEnv(t, func(w http.ResponseWriter, r *http.Request) {})
+	stop3()
+	if err := e3.hook(context.Background(), []string{"--signal", "stop"}); err != nil {
+		t.Fatalf("service down: %v", err)
+	}
+	// No guard token: nothing to send, still exit 0.
+	e4, stop4 := hookEnv(t, func(w http.ResponseWriter, r *http.Request) { t.Error("sent without a token") })
+	defer stop4()
+	os.Remove(e4.Dirs.GuardToken())
+	if err := e4.hook(context.Background(), []string{"--signal", "stop"}); err != nil {
+		t.Fatalf("no token: %v", err)
+	}
+}

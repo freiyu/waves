@@ -131,7 +131,7 @@ func TestMCPRefusesOtherCredentials(t *testing.T) {
 	ctx := context.Background()
 	op, _ := f.core.CreateCredential(ctx, "operator")
 	guard, _ := f.core.CreateCredential(ctx, "guard")
-	for name, tok := range map[string]string{"none": "", "operator": op, "guard": guard, "forged": "wmp_forged"} {
+	for name, tok := range map[string]string{"none": "", "operator": op, "guard": guard, "forged": "wmp_forged"} { // guard:allow fake test fixture
 		req, _ := http.NewRequest("POST", f.srv.URL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json, text/event-stream")

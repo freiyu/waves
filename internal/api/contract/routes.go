@@ -43,6 +43,9 @@ var Routes = []Route{
 
 	{Method: "GET", Path: "/projects", Scope: "op", Summary: "List projects", Req: ProjectListRequest{}, Resp: ProjectList{}},
 	{Method: "POST", Path: "/projects", Scope: "op", Summary: "Register a project", Req: RegisterProjectRequest{}, Resp: Project{}, Status: 201},
+	{Method: "PATCH", Path: "/projects/{id}", Scope: "op", Summary: "Set or clear the fork label of a project", Req: SetProjectForkRequest{}, Resp: Project{}},
+	{Method: "GET", Path: "/graph-layout", Scope: "op", Summary: "The saved arrangement of the Graph page", Resp: GraphLayout{}},
+	{Method: "PUT", Path: "/graph-layout", Scope: "op", Summary: "Save the arrangement of the Graph page", Req: GraphLayout{}, Status: 204},
 	{Method: "GET", Path: "/projects/{id}", Scope: "op", Summary: "Project overview", Req: IDPath{}, Resp: ProjectDetail{}},
 	{Method: "POST", Path: "/projects/{id}/activate", Scope: "op", Summary: "Set the Active Context", Req: IDPath{}, Resp: Project{}},
 	{Method: "GET", Path: "/settings", Scope: "op", Summary: "Global settings", Resp: Settings{}},

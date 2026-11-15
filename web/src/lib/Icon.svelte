@@ -34,6 +34,13 @@
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import User from '@lucide/svelte/icons/user';
   import LogOut from '@lucide/svelte/icons/log-out';
+  import SquareTerminal from '@lucide/svelte/icons/square-terminal';
+  import GitFork from '@lucide/svelte/icons/git-fork';
+  import RotateCw from '@lucide/svelte/icons/rotate-cw';
+  import Workflow from '@lucide/svelte/icons/workflow';
+  import LayoutGrid from '@lucide/svelte/icons/layout-grid';
+  import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
+  import PanelRight from '@lucide/svelte/icons/panel-right';
 
   const ICONS = {
     run: CirclePlay, wait: Clock, ok: CircleCheck, fail: CircleX, warn: TriangleAlert, neu: CircleDashed,
@@ -41,14 +48,14 @@
     gear: Settings, dot: Circle, menu: Menu, search: Search, bell: Bell,
     chev: ChevronDown, chevu: ChevronUp, chevr: ChevronRight, chevl: ChevronLeft, more: Ellipsis, copy: Copy,
     plus: Plus, x: X, check: Check, sun: Sun, moon: Moon, monitor: Monitor, arrow: ArrowRight, user: User,
-    signout: LogOut,
+    signout: LogOut, release: LogOut, prompt: SquareTerminal, fork: GitFork, retry: RotateCw, graph: Workflow, overview: LayoutGrid, updown: ChevronsUpDown, panelr: PanelRight,
   };
   export type IconName = keyof typeof ICONS;
 </script>
 
 <script lang="ts">
-  let { name, size = 16, class: cls = '' }: { name: IconName; size?: number; class?: string } = $props();
+  let { name, size = 16, stroke = 1.5, class: cls = '' }: { name: IconName; size?: number; stroke?: number; class?: string } = $props();
   const C = $derived(ICONS[name]);
 </script>
 
-<C {size} strokeWidth={1.5} class={cls} fill={name === 'dot' ? 'currentColor' : 'none'} aria-hidden="true" />
+<C {size} strokeWidth={stroke} class={cls} fill={name === 'dot' ? 'currentColor' : 'none'} aria-hidden="true" />

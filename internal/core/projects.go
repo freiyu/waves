@@ -19,6 +19,11 @@ import (
 // RegisterProject registers an existing folder. The path is resolved with
 // symlinks; nothing in the folder is created or deleted.
 func (s *Service) RegisterProject(ctx context.Context, p Principal, path, name string) (string, error) {
+	return s.RegisterProjectFork(ctx, p, path, name, "")
+}
+
+// RegisterProjectFork registers a project; forkOf, when set, names the registered project it is a fork of.
+func (s *Service) RegisterProjectFork(ctx context.Context, p Principal, path, name, forkOf string) (string, error) {
 	if !p.IsOperator() {
 		return "", errWrongScope
 	}
@@ -63,8 +68,13 @@ func (s *Service) RegisterProject(ctx context.Context, p Principal, path, name s
 		}
 		var active int
 		t.QueryRowContext(ctx, `SELECT count(*) FROM projects WHERE is_active = 1`).Scan(&active)
-		if _, err := t.ExecContext(ctx, `INSERT INTO projects(id, name, path, is_git, base_branch, is_active, created_at) VALUES (?,?,?,?,?,?,?)`,
-			id, name, real, b2i(isGit), store.NullStr(branch), b2i(active == 0), s.ts()); err != nil {
+		if forkOf != "" {
+			if err := s.mustProject(ctx, t, forkOf); err != nil {
+				return errValidation("The project this one is a fork of is not registered.", "Pick a project from the list, or leave the field empty.")
+			}
+		}
+		if _, err := t.ExecContext(ctx, `INSERT INTO projects(id, name, path, is_git, base_branch, is_active, created_at, fork_of) VALUES (?,?,?,?,?,?,?,?)`,
+			id, name, real, b2i(isGit), store.NullStr(branch), b2i(active == 0), s.ts(), store.NullStr(forkOf)); err != nil {
 			return wrap(err, "store project")
 		}
 		if _, err := t.ExecContext(ctx, `INSERT INTO project_settings(project_id, updated_at) VALUES (?,?)`, id, s.ts()); err != nil {
@@ -142,6 +152,9 @@ func (s *Service) RemoveProject(ctx context.Context, p Principal, id string) err
 		}
 		if _, err := t.ExecContext(ctx, `UPDATE projects SET removed_at = ?, is_active = 0 WHERE id = ?`, s.ts(), id); err != nil {
 			return wrap(err, "remove project")
+		}
+		if _, err := t.ExecContext(ctx, `UPDATE projects SET fork_of = NULL WHERE fork_of = ?`, id); err != nil {
+			return wrap(err, "clear forks of the removed project")
 		}
 		if _, err := t.ExecContext(ctx, `UPDATE credentials SET revoked_at = ? WHERE project_id = ? AND revoked_at IS NULL`, s.ts(), id); err != nil {
 			return wrap(err, "revoke project credentials")
@@ -269,4 +282,39 @@ func (s *Service) AddRequirement(ctx context.Context, p Principal, projectID, ki
 		return t.audit(ctx, store.AuditRecord{Event: "requirements.added", ActorScope: "operator", ActorRef: p.ActorRef(), ProjectID: projectID, Subject: id, Detail: map[string]any{"kind": kind, "path": path, "sha256": hash}})
 	})
 	return id, err
+}
+
+// SetProjectFork sets or clears (empty forkOf) the fork label of a project. A label only: it changes no rule of
+// approval, lease or guard. A project cannot be a fork of itself, nor of one of its own forks.
+func (s *Service) SetProjectFork(ctx context.Context, p Principal, id, forkOf string) error {
+	if !p.IsOperator() {
+		return errWrongScope
+	}
+	return s.tx(ctx, func(t *Tx) error {
+		if err := s.mustProject(ctx, t, id); err != nil {
+			return err
+		}
+		if forkOf != "" {
+			if forkOf == id {
+				return errValidation("A project cannot be a fork of itself.", "Pick another project.")
+			}
+			if err := s.mustProject(ctx, t, forkOf); err != nil {
+				return errValidation("The project this one is a fork of is not registered.", "Pick a project from the list.")
+			}
+			// Walk up from the new origin: reaching this project would close a loop.
+			for cur, hops := forkOf, 0; cur != "" && hops < 1000; hops++ {
+				var up sql.NullString
+				t.QueryRowContext(ctx, `SELECT fork_of FROM projects WHERE id = ?`, cur).Scan(&up)
+				if up.String == id {
+					return errValidation("That would make the forks a loop.", "Pick a project that is not a fork of this one.")
+				}
+				cur = up.String
+			}
+		}
+		if _, err := t.ExecContext(ctx, `UPDATE projects SET fork_of = ? WHERE id = ?`, store.NullStr(forkOf), id); err != nil {
+			return wrap(err, "set fork")
+		}
+		t.publish("project.changed", map[string]string{"project_id": id})
+		return t.audit(ctx, store.AuditRecord{Event: "project.fork_set", ActorScope: "operator", ActorRef: p.ActorRef(), ProjectID: id, Detail: map[string]any{"fork_of": forkOf}})
+	})
 }

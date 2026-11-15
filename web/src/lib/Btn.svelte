@@ -2,7 +2,7 @@
   import { tv } from 'tailwind-variants';
   // shadcn-style button variants on the Waves tokens: primary, secondary, ghost, destructive, small.
   export const button = tv({
-    base: 'inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-semibold no-underline transition-colors duration-100 disabled:cursor-not-allowed disabled:border-line disabled:bg-muted disabled:text-fg-muted',
+    base: 'press inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border text-sm font-semibold no-underline disabled:cursor-not-allowed disabled:border-line disabled:bg-muted disabled:text-fg-muted',
     variants: {
       kind: {
         '': 'border-line-strong bg-surface text-fg hover:bg-muted',
@@ -10,7 +10,8 @@
         dng: 'border-st-danger bg-surface text-st-danger hover:bg-st-danger-soft',
         ghost: 'border-transparent bg-transparent text-fg hover:bg-muted',
       },
-      sm: { true: 'min-h-7 px-2.5 text-[13px]', false: 'min-h-8 px-3' },
+      // One size: 36 high and 104 wide for page and dialog actions; `sm` keeps the 36 height but sizes to its label (top bar, inline toggles).
+      sm: { true: 'px-3', false: 'min-w-[104px] px-3' },
       pressed: { true: 'bg-muted border-fg' },
     },
     defaultVariants: { kind: '', sm: false },

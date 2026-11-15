@@ -14,18 +14,19 @@ import (
 	"waves/internal/store"
 )
 
-const execSelect = `SELECT e.id, e.task_id, t.title, t.key, e.project_id, p.name, e.mode, e.state, COALESCE(t.blocked_reason,''), e.started_at, e.ended_at, e.created_at
+const execSelect = `SELECT e.id, e.task_id, t.title, t.key, e.project_id, p.name, e.mode, e.state, COALESCE(t.blocked_reason,''), e.started_at, e.ended_at, e.created_at,
+	(SELECT w.since FROM execution_waits w WHERE w.execution_id = e.id AND w.ended_at IS NULL AND e.state = 'Running')
 	FROM executions e JOIN tasks t ON t.id = e.task_id JOIN projects p ON p.id = e.project_id`
 
 func (s *Service) scanSummary(sc interface{ Scan(...any) error }) (contract.ExecutionSummary, error) {
 	var x contract.ExecutionSummary
 	var st, reason, created string
-	var started, ended sql.NullString
-	if err := sc.Scan(&x.ID, &x.TaskID, &x.TaskTitle, &x.TaskCode, &x.ProjectID, &x.ProjectName, &x.Mode, &st, &reason, &started, &ended, &created); err != nil {
+	var started, ended, waiting sql.NullString
+	if err := sc.Scan(&x.ID, &x.TaskID, &x.TaskTitle, &x.TaskCode, &x.ProjectID, &x.ProjectName, &x.Mode, &st, &reason, &started, &ended, &created, &waiting); err != nil {
 		return x, err
 	}
 	x.Harness, x.State, x.TaskCode = "Claude Code", snake(st), strings.ToUpper(x.TaskCode)
-	x.StartedAt = tptr(started)
+	x.StartedAt, x.WaitingSince = tptr(started), tptr(waiting)
 	if x.StartedAt != nil {
 		end := s.now()
 		if ended.Valid {
@@ -240,7 +241,22 @@ func (s *Service) ResolveExecution(ctx context.Context, p Principal, id, decisio
 		return &Error{Status: http.StatusNotImplemented, Code: "unsupported", Message: "Waves cannot resume a Claude Code session it did not start.",
 			NextStep: "Resume it yourself with claude --resume, or choose Retry so the agent claims the task again."}
 	}
-	diffPath, files := s.captureDiff(ctx, id)
+	// The diff of an execution is rewritten only for one that can be resolved; the state is checked again inside the transaction.
+	var pre string
+	if err := s.db.R.QueryRowContext(ctx, `SELECT state FROM executions WHERE id = ?`, id).Scan(&pre); err != nil {
+		return errNotFound("execution", "Open the Executions list.")
+	}
+	if pre != "Interrupted" && pre != "Disconnected" {
+		return errInvalidState("Only an interrupted or disconnected execution needs a decision.", "")
+	}
+	if decision != "fail" && decision != "retry_fresh" && decision != "complete_partial" {
+		return errValidation("Unknown decision.", "Use fail, complete_partial, resume or retry_fresh.")
+	}
+	var diffPath string
+	var files int
+	if decision == "complete_partial" { // only this one stores a diff
+		diffPath, files = s.captureDiff(ctx, id)
+	}
 	a := actorOf(p)
 	return s.tx(ctx, func(t *Tx) error {
 		var st, task, project string

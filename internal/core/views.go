@@ -74,13 +74,13 @@ func (s *Service) Projects(ctx context.Context) (contract.ProjectList, error) {
 func (s *Service) Project(ctx context.Context, id string) (contract.Project, error) {
 	var p contract.Project
 	var isGit, active int
-	var base sql.NullString
-	err := s.db.R.QueryRowContext(ctx, `SELECT p.id, p.name, p.path, p.is_git, p.base_branch, p.is_active, ps.guard_policy FROM projects p JOIN project_settings ps ON ps.project_id = p.id
-		WHERE p.id = ? AND p.removed_at IS NULL`, id).Scan(&p.ID, &p.Name, &p.Path, &isGit, &base, &active, &p.GuardPolicy)
+	var base, fork sql.NullString
+	err := s.db.R.QueryRowContext(ctx, `SELECT p.id, p.name, p.path, p.is_git, p.base_branch, p.is_active, ps.guard_policy, p.fork_of FROM projects p JOIN project_settings ps ON ps.project_id = p.id
+		WHERE p.id = ? AND p.removed_at IS NULL`, id).Scan(&p.ID, &p.Name, &p.Path, &isGit, &base, &active, &p.GuardPolicy, &fork)
 	if err != nil {
 		return p, errNotFound("project", "Open the Projects list.")
 	}
-	p.IsGit, p.Active, p.BaseBranch = isGit == 1, active == 1, base.String
+	p.IsGit, p.Active, p.BaseBranch, p.ForkOf = isGit == 1, active == 1, base.String, fork.String
 	if p.IsGit {
 		_, p.Branch = gitInfo(ctx, p.Path)
 	}

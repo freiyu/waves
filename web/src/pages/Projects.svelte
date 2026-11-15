@@ -17,12 +17,14 @@
   import View from '../lib/View.svelte';
   import type { Column, Filter } from '../lib/table';
   import Icon from '../lib/Icon.svelte';
+  import { forkText } from '../lib/waiting.svelte';
 
   const a = app();
   const { projects } = shellData();
   let adding = $state(false);
   let path = $state('');
   let name = $state('');
+  let forkOf = $state('');
   let error = $state('');
 
   // "#/projects?register" opens the form, from another page or while already here; the marker is then dropped from the address.
@@ -42,10 +44,10 @@
     e.preventDefault();
     error = '';
     try {
-      await a.api.registerProject(path.trim(), name.trim() || undefined);
+      await a.api.registerProject(path.trim(), name.trim() || undefined, forkOf || undefined);
       toast.success('Project registered');
       adding = false;
-      path = name = '';
+      path = name = forkOf = '';
       await projects.reload();
     } catch (x) {
       error = x instanceof ApiError ? `${x.message} ${x.nextStep}` : String(x);
@@ -69,21 +71,21 @@
   ];
   const cols: Column<Project>[] = [
     { key: 'name', label: 'Project', sort: (r) => r.name, cell: pname },
+    { key: 'phase', label: 'Active phase', cell: pphase },
     { key: 'path', label: 'Path', text: (r) => r.path, mono: true },
     { key: 'branch', label: 'Branch', text: (r) => r.branch ?? 'none' },
     { key: 'git', label: 'Git', text: (r) => (r.is_git ? 'yes' : 'no') },
-    { key: 'phase', label: 'Active phase', cell: pphase },
     { key: 'last', label: 'Last activity', sort: (r) => r.last_activity_at ?? '', text: (r) => ago(r.last_activity_at) },
     { key: 'act', label: 'Context', cell: pact },
   ];
 </script>
 
-{#snippet pname(r: Project)}<a href={href('/projects/' + r.id)}><b>{r.name}</b></a> {#if r.active}<span class="tag">Active Context</span>{/if}{/snippet}
+{#snippet pname(r: Project)}<a href={href('/projects/' + r.id)}><b>{r.name}</b></a> {#if r.active}<span class="tag">Active Context</span>{/if}{#if forkText(projects.data?.items, r.fork_of)}<Badge state="fork" text={forkText(projects.data?.items, r.fork_of)} />{/if}{/snippet}
 {#snippet pphase(r: Project)}{#if r.active_phase}<Badge state={r.active_phase.state} text="{r.active_phase.code} {r.active_phase.title}" />{:else}<span class="muted">no workflow yet</span>{/if}{/snippet}
 {#snippet pact(r: Project)}{#if !r.active}<Btn sm onclick={() => activate(r)}>Make active</Btn>{/if}{/snippet}
 
-<PageHead title="Projects" sub="Registered projects. Waves never deletes a project folder.">
-  {#snippet right()}<Btn kind="pri" onclick={() => (adding = true)}><Icon name="plus" size={14} />Register project</Btn>{/snippet}
+<PageHead title="Projects">
+  {#snippet right()}<Btn kind="pri" onclick={() => (adding = true)}>Register</Btn>{/snippet}
 </PageHead>
 <View res={projects} label="projects">
   {#snippet children(p)}
@@ -104,7 +106,8 @@
       <div class="mb">
         <div><label class="lbl" for="reg-path">Folder path</label><input id="reg-path" class="field mono w-full" placeholder="~/work/my-project" bind:value={path} required /></div>
         <div><label class="lbl" for="reg-name">Name (optional)</label><input id="reg-name" class="field w-full" bind:value={name} /></div>
-        <div class="small muted">The folder is referenced in place. Waves never deletes it.</div>
+        {#if projects.data?.items.length}<div><label class="lbl" for="reg-fork">Forked from (optional)</label><select id="reg-fork" class="field min-h-10 w-full" bind:value={forkOf}><option value="">None</option>{#each projects.data.items as o (o.id)}<option value={o.id}>{o.name}</option>{/each}</select></div>{/if}
+        <div class="muted">The folder is referenced in place. Waves never deletes it.</div>
         {#if error}<Note kind="dng" icon="fail" role="alert">{error}</Note>{/if}
       </div>
       <div class="mf"><Btn onclick={() => (adding = false)}>Cancel</Btn><Btn type="submit" kind="pri" disabled={!path.trim()}>Register</Btn></div>

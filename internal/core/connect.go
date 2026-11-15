@@ -119,6 +119,39 @@ func encodeJSON(m map[string]any) []byte {
 }
 
 // planned computes both files after connecting with policy.
+// signalEvents are the Claude Code events that tell Waves a turn ended (Stop) or began (UserPromptSubmit). Their hooks
+// only report: they never decide, never block, and exit 0 whatever happens.
+var signalEvents = map[string]string{"Stop": "stop", "UserPromptSubmit": "prompt", "SessionEnd": "end"}
+
+func signalEntry(bin, event string) map[string]any {
+	return map[string]any{"hooks": []any{map[string]any{"type": "command", "command": shQuote(bin) + " hook --signal " + event, "timeout": 5}}}
+}
+
+// isWavesSignalHook recognizes a signal entry Waves installed by the shape of its command (not its path, like the guard hook
+// entry: a binary that moved still has its entries found, replaced and removed).
+func isWavesSignalHook(e any) bool {
+	m, _ := e.(map[string]any)
+	hs, _ := m["hooks"].([]any)
+	for _, h := range hs {
+		hm, _ := h.(map[string]any)
+		if c, _ := hm["command"].(string); !strings.Contains(c, " hook --signal ") {
+			return false // a user's own command shares the entry: leave the entry alone
+		}
+	}
+	return len(hs) > 0
+}
+
+// withoutWavesSignal drops this binary's signal entries from one event's list.
+func withoutWavesSignal(list []any) []any {
+	var kept []any
+	for _, e := range list {
+		if !isWavesSignalHook(e) {
+			kept = append(kept, e)
+		}
+	}
+	return kept
+}
+
 // hookEntry is the PreToolUse entry Waves installs.
 func hookEntry(bin, policy string) map[string]any {
 	return map[string]any{"matcher": hookMatcher, "hooks": []any{map[string]any{"type": "command", "command": hookCommand(bin, policy), "timeout": 5}}}
@@ -168,6 +201,26 @@ func hookDrift(root, policy string) string {
 	return ""
 }
 
+// signalHooksOn reports whether all the signal hooks Waves installs are in the project's settings file.
+func signalHooksOn(root string) bool {
+	sm, exists, err := readJSONObject(filesOf(root).settings)
+	if err != nil || !exists {
+		return false
+	}
+	hooks, _ := sm["hooks"].(map[string]any)
+	for ev := range signalEvents {
+		list, _ := hooks[ev].([]any)
+		found := false
+		for _, e := range list {
+			found = found || isWavesSignalHook(e)
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func plannedEdits(root, project, policy string) (settings, mcpFile []byte, lines []string, err error) {
 	f := filesOf(root)
 	bin := wavesBinary()
@@ -192,6 +245,10 @@ func plannedEdits(root, project, policy string) (settings, mcpFile []byte, lines
 		}
 	}
 	hooks["PreToolUse"] = append(kept, entry)
+	for ev, sig := range signalEvents {
+		list, _ := hooks[ev].([]any)
+		hooks[ev] = append(withoutWavesSignal(list), signalEntry(bin, sig))
+	}
 	sm["hooks"] = hooks
 	en, _ := sm["enabledMcpjsonServers"].([]any)
 	has := false
@@ -211,7 +268,7 @@ func plannedEdits(root, project, policy string) (settings, mcpFile []byte, lines
 	eb, _ := json.Marshal(entry)
 	lines = []string{
 		"# " + f.settings,
-		`+ "hooks": { "PreToolUse": [ ` + string(eb) + ` ] }`,
+		`+ "hooks": { "PreToolUse": [ ` + string(eb) + ` ], "Stop": [ ... hook --signal stop ], "UserPromptSubmit": [ ... hook --signal prompt ], "SessionEnd": [ ... hook --signal end ] }`,
 		`+ "enabledMcpjsonServers": [ "waves" ]`,
 		"# " + f.mcp,
 		fmt.Sprintf(`+ "mcpServers": { "waves": { "type": "stdio", "command": %q, "args": ["mcp", "--project", %q] } }`, bin, project),
@@ -396,7 +453,7 @@ func (s *Service) Disconnect(ctx context.Context, p Principal, elevation, projec
 	var rec changeRecord
 	json.Unmarshal([]byte(raw), &rec)
 	f := filesOf(root)
-	lines := []string{"# " + f.settings, `- the Waves PreToolUse hook`, "# " + f.mcp, `- "mcpServers.waves"`}
+	lines := []string{"# " + f.settings, `- the Waves PreToolUse, Stop, UserPromptSubmit and SessionEnd hooks`, "# " + f.mcp, `- "mcpServers.waves"`}
 	err = s.tx(ctx, func(t *Tx) error {
 		if err := s.RequireElevation(ctx, t, p, elevation); err != nil {
 			return err
@@ -441,6 +498,14 @@ func revertSettings(path string, rec changeRecord) error {
 			delete(hooks, "PreToolUse")
 		} else {
 			hooks["PreToolUse"] = kept
+		}
+		for ev := range signalEvents {
+			list, _ := hooks[ev].([]any)
+			if k := withoutWavesSignal(list); len(k) == 0 {
+				delete(hooks, ev)
+			} else {
+				hooks[ev] = k
+			}
 		}
 		if len(hooks) == 0 {
 			delete(m, "hooks")
@@ -550,6 +615,9 @@ func (s *Service) GuardInfo(ctx context.Context, projectID string) (contract.Gua
 			g.Drift = hookDrift(root, g.Policy)
 		}
 		g.Installed = g.Drift == ""
+		if root, err := s.projectPath(ctx, s.db.R, projectID); err == nil {
+			g.WaitingHooks = signalHooksOn(root)
+		}
 	}
 	s.db.R.QueryRowContext(ctx, `SELECT count(*) FROM guard_decisions WHERE project_id = ? AND would_deny = 1 AND ts > ?`, projectID, store.FormatTime(s.now().Add(-24*time.Hour))).Scan(&g.WouldDeny24h)
 	return g, nil

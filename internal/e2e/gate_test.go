@@ -170,6 +170,30 @@ func TestGateBypass(t *testing.T) {
 			st, code := dash.call("POST", "/auth/stepup", map[string]string{"passphrase": "not the passphrase at all", "approval_id": apr}, nil, nil)
 			return st >= 400, fmt.Sprintf("%d %s", st, code)
 		}},
+		{"wait signal with the operator token", "api", func() (bool, string) {
+			st, code := i.operator().call("POST", "/guard/signal", map[string]string{"session_id": "sess-x", "event": "stop"}, nil, nil)
+			return st >= 400, fmt.Sprintf("%d %s", st, code)
+		}},
+		{"wait signal with the lease token", "api", func() (bool, string) {
+			st, code := i.as(lease).call("POST", "/guard/signal", map[string]string{"session_id": "sess-x", "event": "stop"}, nil, nil)
+			return st >= 400, fmt.Sprintf("%d %s", st, code)
+		}},
+		{"wait signal with the MCP token", "api", func() (bool, string) {
+			st, code := i.as(mcpTok).call("POST", "/guard/signal", map[string]string{"session_id": "sess-x", "event": "stop"}, nil, nil)
+			return st >= 400, fmt.Sprintf("%d %s", st, code)
+		}},
+		{"graph layout saved with the MCP token", "api", func() (bool, string) {
+			st, code := i.as(mcpTok).call("PUT", "/graph-layout", map[string]any{"nodes": map[string]any{}, "lines": map[string]any{}}, nil, nil)
+			return st >= 400, fmt.Sprintf("%d %s", st, code)
+		}},
+		{"graph layout saved with the guard token", "api", func() (bool, string) {
+			st, code := i.as(i.guard).call("PUT", "/graph-layout", map[string]any{"nodes": map[string]any{}, "lines": map[string]any{}}, nil, nil)
+			return st >= 400, fmt.Sprintf("%d %s", st, code)
+		}},
+		{"fork label changed with the lease token", "api", func() (bool, string) {
+			st, code := i.as(lease).call("PATCH", "/projects/"+p.id, map[string]string{"fork_of": work.id}, nil, nil)
+			return st >= 400, fmt.Sprintf("%d %s", st, code)
+		}},
 		{"replayed login link", "api", func() (bool, string) {
 			var l struct {
 				URL string `json:"url"`

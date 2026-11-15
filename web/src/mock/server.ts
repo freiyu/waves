@@ -3,7 +3,7 @@
 // handling all run for real. It follows the contract and enforces the same
 // gates the real service will: no approval without a step-up.
 import type { Transport, TransportRequest, TransportResponse } from '../api/transport';
-import type { ApprovalDetail, AttentionItem, ExecutionDetail, Status } from '../api/models';
+import type { ApprovalDetail, AttentionItem, ExecutionDetail, GraphLayout, Status } from '../api/models';
 import { FIRST_VALID_LINK, MOCK_CSRF, MOCK_PASSPHRASE, seed, type MockDb } from './seed';
 import { MockBus } from './bus';
 
@@ -73,8 +73,10 @@ export function createMock(opts: MockOptions = {}) {
   function toSummary(e: ExecutionDetail) {
     const { harness_version, lease, workspace_path, workspace_locked, start_commit, usage, history, events, diff_files, recovery, queued_reason, error, result, ...s } = e;
     void [harness_version, lease, workspace_path, workspace_locked, start_commit, usage, history, events, diff_files, recovery, queued_reason, error, result];
-    return s;
+    return { ...s, waiting_since: waitingSince(e) };
   }
+  // The harness waits only while its execution runs, as in the service.
+  const waitingSince = (e: ExecutionDetail) => (e.state === 'running' ? db.waiting.get(e.id) : undefined);
   const toApprovalSummary = (a: ApprovalDetail) => {
     const { action, facts, impact, commands, subject_hash, allowed_decisions, step_up, phase_id, ...s } = a;
     void [action, facts, impact, commands, subject_hash, allowed_decisions, step_up, phase_id];
@@ -176,17 +178,44 @@ export function createMock(opts: MockOptions = {}) {
     if (!path.startsWith('/') && !path.startsWith('~')) throw fail(422, 'validation_failed', 'The path must be absolute.', 'Use a path such as ~/work/my-project.');
     if (db.projects.some((p) => p.path === path)) throw fail(409, 'conflict', 'This folder is already registered.', 'Open it from the Projects list.');
     const name = String(c.body?.name || path.split('/').filter(Boolean).at(-1));
-    const p = { id: secret('prj'), name, path, is_git: true, branch: 'main', base_branch: 'main', active: false, progress_pct: 0, running_executions: 0, failed_executions: 0, pending_approvals: 0, guard_policy: 'off' as const };
+    const forkOf = String(c.body?.fork_of ?? '');
+    if (forkOf && !db.projects.some((x) => x.id === forkOf)) throw fail(422, 'validation_failed', 'The project this one is a fork of is not registered.', 'Pick a project from the list, or leave the field empty.');
+    const p = { id: secret('prj'), name, path, is_git: true, branch: 'main', base_branch: 'main', active: false, progress_pct: 0, running_executions: 0, failed_executions: 0, pending_approvals: 0, guard_policy: 'off' as const, ...(forkOf ? { fork_of: forkOf } : {}) };
     db.projects.push(p);
     db.details.set(p.id, { ...p, phases: [], tasks: [], pending_approval_items: [], requirements: [], planning: {} });
     db.requirements.set(p.id, []);
     db.workflows.set(p.id, { versions: [] });
-    db.guard.set(p.id, { policy: 'off', installed: false, would_deny_24h: 0, not_defended: db.guard.get('prj_billing')!.not_defended, unmanaged_sessions: 'allow' });
+    db.guard.set(p.id, { policy: 'off', installed: false, waiting_hooks: false, would_deny_24h: 0, not_defended: db.guard.get('prj_billing')!.not_defended, unmanaged_sessions: 'allow' });
     db.guardDecisions.set(p.id, []);
     bus.emit('project.changed', { project_id: p.id });
     return ok(p, 201);
   });
   r('GET /projects/{id}', (c) => { recount(); return ok(project(c.params.id!)); });
+  r('PATCH /projects/{id}', (c) => {
+    const p = db.projects.find((x) => x.id === c.params.id);
+    if (!p) throw fail(404, 'not_found', 'No such project.', 'Open the Projects list.');
+    const forkOf = String(c.body?.fork_of ?? '');
+    if (forkOf === p.id) throw fail(422, 'validation_failed', 'A project cannot be a fork of itself.', 'Pick another project.');
+    if (forkOf && !db.projects.some((x) => x.id === forkOf)) throw fail(422, 'validation_failed', 'The project this one is a fork of is not registered.', 'Pick a project from the list.');
+    for (let cur = db.projects.find((x) => x.id === forkOf); cur; cur = db.projects.find((x) => x.id === cur!.fork_of)) {
+      if (cur.fork_of === p.id) throw fail(422, 'validation_failed', 'That would make the forks a loop.', 'Pick a project that is not a fork of this one.');
+    }
+    p.fork_of = forkOf || undefined;
+    const d = db.details.get(p.id);
+    if (d) d.fork_of = p.fork_of;
+    bus.emit('project.changed', { project_id: p.id });
+    return ok(p);
+  });
+  r('GET /graph-layout', () => ok(db.layout));
+  r('PUT /graph-layout', (c) => {
+    const l = c.body as GraphLayout | undefined;
+    const sides = ['top', 'right', 'bottom', 'left'];
+    const unit = (v: unknown) => v === undefined || (typeof v === 'number' && v >= 0 && v <= 1);
+    if (!l || typeof l.nodes !== 'object' || typeof l.lines !== 'object' || !l.nodes || !l.lines) throw fail(422, 'validation_failed', 'The arrangement is not valid.', 'Reload the Graph and try again.');
+    for (const v of Object.values(l.lines)) if (!sides.includes(v.from) || !sides.includes(v.to) || !unit(v.fo ?? undefined) || !unit(v.tt ?? undefined)) throw fail(422, 'validation_failed', 'The arrangement is not valid: a line has an unknown side or position.', 'Reload the Graph and try again.');
+    db.layout = l;
+    return { status: 204 };
+  });
   r('POST /projects/{id}/activate', (c) => {
     project(c.params.id!);
     for (const p of db.projects) p.active = p.id === c.params.id;
@@ -198,15 +227,16 @@ export function createMock(opts: MockOptions = {}) {
   r('PATCH /settings', (c) => {
     const b = c.body ?? {};
     // Unknown keys are refused, so a body can never reach hard caps, the listen address or LAN access.
-    const known = ['elevation_window_min', 'max_concurrent', 'heartbeat_interval_s', 'log_retention_days'];
+    const known = ['elevation_window_min', 'max_concurrent', 'heartbeat_interval_s', 'log_retention_days', 'waiting_max_h'];
     for (const k of Object.keys(b)) if (!known.includes(k)) throw fail(422, 'validation_failed', `The setting "${k}" cannot be changed here.`, 'Use the documented settings only.');
-    const sec = b.elevation_window_min !== undefined || b.max_concurrent !== undefined;
+    const sec = b.elevation_window_min !== undefined || b.max_concurrent !== undefined || b.waiting_max_h !== undefined;
     if (sec) requireElevation(c, undefined, ['window', 'single_use']);
     const bad = (m: string) => fail(422, 'validation_failed', m, 'Use a value in the allowed range.');
     if (b.max_concurrent !== undefined && !(b.max_concurrent >= 1 && b.max_concurrent <= db.settings.hard_cap)) throw bad(`Concurrent executions must be 1 to ${db.settings.hard_cap}.`);
     if (b.elevation_window_min !== undefined && !(b.elevation_window_min >= 0 && b.elevation_window_min <= 30)) throw bad('The elevation window is 0 to 30 minutes.');
     if (b.heartbeat_interval_s !== undefined && !(b.heartbeat_interval_s >= 15 && b.heartbeat_interval_s <= 300)) throw bad('The heartbeat interval is 15 to 300 seconds.');
     if (b.log_retention_days !== undefined && !(b.log_retention_days >= 1 && b.log_retention_days <= 365)) throw bad('Log retention is 1 to 365 days.');
+    if (b.waiting_max_h !== undefined && !(b.waiting_max_h >= 1 && b.waiting_max_h <= 72)) throw bad('The longest wait is 1 to 72 hours.');
     Object.assign(db.settings, Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)));
     return ok(db.settings);
   });
@@ -348,7 +378,7 @@ export function createMock(opts: MockOptions = {}) {
     if (pid) list = list.filter((e) => e.project_id === pid);
     return ok({ items: list.map(toSummary) });
   });
-  r('GET /executions/{id}', (c) => ok(exec(c.params.id!)));
+  r('GET /executions/{id}', (c) => { const e = exec(c.params.id!); return ok({ ...e, waiting_since: waitingSince(e) }); });
   r('GET /executions/{id}/log', (c) => {
     const bytes = new TextEncoder().encode(db.logs.get(exec(c.params.id!).id) ?? '');
     return { status: 200, text: new TextDecoder().decode(bytes.slice(Number(c.query.get('offset') ?? 0))) };
@@ -405,6 +435,7 @@ export function createMock(opts: MockOptions = {}) {
     requireElevation(c, undefined, ['window', 'single_use']);
     const g = db.guard.get(d.id)!;
     g.installed = true;
+    g.waiting_hooks = true;
     if (g.policy === 'off') g.policy = 'audit';
     const p = db.projects.find((x) => x.id === d.id)!;
     p.guard_policy = g.policy;
@@ -436,6 +467,7 @@ export function createMock(opts: MockOptions = {}) {
     requireElevation(c, undefined, ['window', 'single_use']);
     const g = db.guard.get(d.id)!;
     g.installed = false;
+    g.waiting_hooks = false;
     g.policy = 'off';
     const p = db.projects.find((x) => x.id === d.id)!;
     p.guard_policy = 'off';

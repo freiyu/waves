@@ -12,6 +12,7 @@ func (s *Server) serverOnlyRoutes() []route {
 	return []route{
 		{"DELETE", "/projects/{id}", "op", s.removeProject},
 		{"POST", "/guard/decide", "guard", s.guardDecide},
+		{"POST", "/guard/signal", "guard", s.guardSignal},
 		{"GET", "/tasks", "op", s.tasks},
 		{"GET", "/tasks/{id}", "op", s.taskDetail},
 		{"POST", "/tasks/{id}/{action}", "op", s.tasksRoute},

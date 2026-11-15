@@ -1,7 +1,7 @@
 // Invented sample data for the mock adapter. Names, paths, ids and commands are
 // fake. The story is kept consistent: states, counts and approvals agree.
 import type {
-  ApprovalDetail, AuditRecord, ContextPackage, ExecutionDetail, GuardDecision, Harness, PhaseReview, Project,
+  ApprovalDetail, AuditRecord, ContextPackage, ExecutionDetail, GraphLayout, GuardDecision, Harness, PhaseReview, Project,
   ProjectDetail, Requirement, Settings, WorkflowVersion,
 } from '../api/models';
 import type { components } from '../api/types';
@@ -39,6 +39,10 @@ export interface MockDb {
   audit: AuditRecord[];
   settings: Settings;
   seq: number;
+  /** Executions whose harness said its turn ended: id and since. Shown as waiting_since while the execution is running. */
+  waiting: Map<string, string>;
+  /** The saved arrangement of the Graph page. */
+  layout: GraphLayout;
 }
 
 const NOT_DEFENDED =
@@ -277,7 +281,7 @@ export function seed(now = Date.now()): MockDb {
   const harnessBrief = (policy: 'off' | 'audit' | 'enforce', deny: number) => ({ name: 'Claude Code', version: '2.1.318', connected: policy !== 'off', guard_policy: policy, would_deny_24h: deny, credential_active: policy !== 'off' });
   details.set('prj_billing', {
     ...projects[0]!, phases: [ph('phs_b1', 'P1', 'Schema design', 'completed'), ph('phs_b2', 'P2', 'Persistence layer', 'in_progress'), ph('phs_b3', 'P3', 'Payments API', 'planned'), ph('phs_b4', 'P4', 'Hardening', 'planned')],
-    tasks_phase: 'P2 Persistence layer',
+    tasks_phase: 'phs_b2',
     tasks: [
       task('tsk_b2t1', 'p2-t1', 'Add decimal money type', 'done', [], { execution_id: 'exe_91b2d4' }),
       task('tsk_b2t2', 'p2-t2', 'Migrate invoice totals to decimal', 'done', ['p2-t1'], { execution_id: 'exe_3d7c19' }),
@@ -298,7 +302,7 @@ export function seed(now = Date.now()): MockDb {
   });
   details.set('prj_mobile', {
     ...projects[1]!, phases: [ph('phs_m1', 'P1', 'Scaffold', 'completed'), ph('phs_m2', 'P2', 'Design system', 'completed'), ph('phs_m3', 'P3', 'Payments UI', 'in_progress'), ph('phs_m4', 'P4', 'Release prep', 'planned')],
-    tasks_phase: 'P3 Payments UI',
+    tasks_phase: 'phs_m3',
     tasks: [
       task('tsk_m3t1', 'm3-t1', 'Add payment method picker', 'done', []),
       task('tsk_m3t2', 'm3-t2', 'Wire Apple Pay sheet', 'in_review', ['m3-t1'], { execution_id: 'exe_b220f1' }),
@@ -310,7 +314,7 @@ export function seed(now = Date.now()): MockDb {
     next_step: { text: 'Decide the Result approval for m3-t2 and the revised workflow v2, then look at the failed m3-t4.', ref_type: 'approval', ref_id: 'apr_m3t2' },
   });
   details.set('prj_docs', {
-    ...projects[2]!, phases: [ph('phs_d1', 'P1', 'Content audit', 'awaiting_phase_review'), ph('phs_d2', 'P2', 'Restructure navigation', 'planned')], tasks_phase: 'P1 Content audit',
+    ...projects[2]!, phases: [ph('phs_d1', 'P1', 'Content audit', 'awaiting_phase_review'), ph('phs_d2', 'P2', 'Restructure navigation', 'planned')], tasks_phase: 'phs_d1',
     tasks: [
       task('tsk_d1t1', 'd1-t1', 'Inventory all pages', 'done', []), task('tsk_d1t2', 'd1-t2', 'Fix broken internal links', 'done', ['d1-t1']),
       task('tsk_d1t3', 'd1-t3', 'Rewrite the install guide', 'done', ['d1-t1']), task('tsk_d1t4', 'd1-t4', 'Audit sidebar order', 'cancelled', []),
@@ -320,10 +324,45 @@ export function seed(now = Date.now()): MockDb {
   });
   details.set('prj_scratch', { ...projects[3]!, phases: [], tasks: [], pending_approval_items: [], requirements: [], planning: {} });
 
+  // ---- a fork of billing-api (redesign): registered as a fork, its own phases and a task whose harness waits for the human ----
+  projects.push({
+    id: 'prj_refund', name: 'billing-api-refund', path: '~/work/billing-api-refund', is_git: true, branch: 'refund', base_branch: 'main', active: false,
+    active_phase: ph('phs_r2', 'P2', 'Refund endpoint', 'in_progress'), progress_pct: 40, running_executions: 1, failed_executions: 0,
+    pending_approvals: 0, guard_policy: 'enforce', last_activity_at: at(1), fork_of: 'prj_billing',
+  });
+  details.set('prj_refund', {
+    ...projects[projects.length - 1]!, phases: [ph('phs_r1', 'P1', 'Plan', 'completed'), ph('phs_r2', 'P2', 'Refund endpoint', 'in_progress')], tasks_phase: 'phs_r2',
+    tasks: [
+      task('tsk_r2t1', 'r2-t1', 'Add refund schema', 'done', [], { execution_id: 'exe_r1a2b3' }),
+      task('tsk_r2t2', 'r2-t2', 'Implement refund endpoint', 'in_progress', ['r2-t1'], { execution_id: 'exe_f9a1c3' }),
+      task('tsk_r2t3', 'r2-t3', 'Refund validation rules', 'in_progress', ['r2-t1'], { execution_id: 'exe_f9a1c4', state_detail: 'Waiting for instruction' }),
+      task('tsk_r2t4', 'r2-t4', 'Webhook handler', 'backlog', ['r2-t2']),
+    ],
+    harness: harnessBrief('enforce', 0), pending_approval_items: [], requirements: [{ source: 'Inline: customers can refund a captured payment', state: 'unchanged' }], planning: {},
+  });
+  versions.set('wfv_r1', v('wfv_r1', 1, 'approved', '4c0a…77e1', 'prj_refund', 'billing-api-refund', [{
+    id: 'phs_r2', code: 'P2', title: 'Refund endpoint', objective: 'Let a captured payment be refunded.',
+    tasks: [{ code: 'r2-t2', title: 'Implement refund endpoint', mode: 'code_change', acceptance: ['A refund is recorded once'] }],
+    validators: [{ id: 'val_r2a', kind: 'command', name: 'unit tests', command: 'go test ./... -race', timeout_s: 300 }],
+  }]));
+  workflows.set('prj_refund', { current_id: 'wfv_r1', versions: [{ id: 'wfv_r1', number: 1, state: 'approved', content_hash: '4c0a…77e1', created_at: at(200) }] });
+  const ex2 = (id: string, tid: string, code: string, title: string, state: ExecutionDetail['state'], startedMin: number, dur: number): ExecutionDetail => ({
+    id, task_id: tid, task_code: code, task_title: title, project_id: 'prj_refund', project_name: 'billing-api-refund', harness: 'Claude Code', harness_version: '2.1.318', mode: 'harness_driven',
+    state, started_at: at(startedMin), duration_s: dur, workspace_path: '~/work/billing-api-refund', workspace_locked: state === 'running', diff_files: 1, events: [], history: [{ at: at(startedMin), state }],
+    lease: state === 'running' ? { id: 'lse_' + id.slice(-4), expires_at: new Date(now + 60_000).toISOString(), heartbeat_interval_s: 15 } : undefined,
+  });
+  const refundExecs = [
+    ex2('exe_r1a2b3', 'tsk_r2t1', 'r2-t1', 'Add refund schema', 'completed', 200, 1800),
+    ex2('exe_f9a1c3', 'tsk_r2t2', 'r2-t2', 'Implement refund endpoint', 'running', 10, 612),
+    ex2('exe_f9a1c4', 'tsk_r2t3', 'r2-t3', 'Refund validation rules', 'running', 31, 1866),
+  ];
+  for (const e of refundExecs) executions.set(e.id, e);
+  const waiting = new Map<string, string>([['exe_f9a1c4', at(31)]]);
+
   const req = (id: string, source: string, kind: 'file' | 'text', rh: string | undefined, now_: string | undefined, min: number, state: 'unchanged' | 'changed', used?: string): Requirement =>
     ({ id, source, kind, recorded_hash: rh, hash_now: now_, added_at: at(min), state, used_by: used, version_id: used ? 'wfv_b2' : undefined });
   const requirements = new Map<string, Requirement[]>();
-  const wfOf: Record<string, string> = { prj_billing: 'wfv_b2', prj_mobile: 'wfv_m1', prj_docs: 'wfv_d1' };
+  const wfOf: Record<string, string> = { prj_billing: 'wfv_b2', prj_mobile: 'wfv_m1', prj_docs: 'wfv_d1', prj_refund: 'wfv_r1' };
   requirements.set('prj_billing', [
     req('req_1', 'docs/spec-billing.md', 'file', '9c4e1fa2…b81d', 'e77a03c9…02fe', 3000, 'changed', 'Workflow billing-api v2 (approved)'),
     req('req_2', 'docs/api-contracts.md', 'file', '51d0b7e3…44c9', '51d0b7e3…44c9', 3000, 'unchanged', 'Workflow billing-api v2 (approved)'),
@@ -332,6 +371,7 @@ export function seed(now = Date.now()): MockDb {
   requirements.set('prj_mobile', [req('req_4', 'docs/checkout-flow.md', 'file', '0e51…aa12', '0e51…aa12', 4000, 'unchanged', 'Workflow mobile-checkout v1 (approved)')]);
   requirements.set('prj_docs', [req('req_5', 'docs/content-plan.md', 'file', '88f2…1d30', '88f2…1d30', 5000, 'unchanged', 'Workflow docs-site v1 (approved)')]);
   requirements.set('prj_scratch', []);
+  requirements.set('prj_refund', [req('req_6', 'Inline: customers can refund a captured payment', 'text', undefined, undefined, 400, 'unchanged', 'Workflow billing-api-refund v1 (approved)')]);
 
   for (const [pid, list] of requirements) for (const r of list) if (r.used_by) r.version_id = wfOf[pid];
   for (const [pid, list] of requirements) details.get(pid)!.requirements = list.map((r) => ({ source: r.source, state: r.state })); // the project's counts follow the list
@@ -345,10 +385,10 @@ export function seed(now = Date.now()): MockDb {
     ],
   }];
   const guard = new Map<string, S['ContractGuardInfo']>();
-  guard.set('prj_billing', { policy: 'audit', installed: true, would_deny_24h: 2, not_defended: NOT_DEFENDED, unmanaged_sessions: 'allow' });
-  guard.set('prj_mobile', { policy: 'enforce', installed: true, would_deny_24h: 2, not_defended: NOT_DEFENDED, unmanaged_sessions: 'allow' });
-  guard.set('prj_docs', { policy: 'off', installed: false, would_deny_24h: 0, not_defended: NOT_DEFENDED, unmanaged_sessions: 'allow' });
-  guard.set('prj_scratch', { policy: 'off', installed: false, would_deny_24h: 0, not_defended: NOT_DEFENDED, unmanaged_sessions: 'allow' });
+  guard.set('prj_billing', { policy: 'audit', installed: true, waiting_hooks: false, would_deny_24h: 2, not_defended: NOT_DEFENDED, unmanaged_sessions: 'allow' });
+  guard.set('prj_mobile', { policy: 'enforce', installed: true, waiting_hooks: true, would_deny_24h: 2, not_defended: NOT_DEFENDED, unmanaged_sessions: 'allow' });
+  guard.set('prj_docs', { policy: 'off', installed: false, waiting_hooks: false, would_deny_24h: 0, not_defended: NOT_DEFENDED, unmanaged_sessions: 'allow' });
+  guard.set('prj_scratch', { policy: 'off', installed: false, waiting_hooks: false, would_deny_24h: 0, not_defended: NOT_DEFENDED, unmanaged_sessions: 'allow' });
   const guardDecisions = new Map<string, GuardDecision[]>();
   guardDecisions.set('prj_billing', [
     { at: at(3), tool: 'Write', target: 'internal/billing/legacy_export.go', decision: 'allow', would_deny: true, reason: 'unmanaged' },
@@ -359,7 +399,8 @@ export function seed(now = Date.now()): MockDb {
     { at: at(60), tool: 'Write', target: 'ios/Podfile', decision: 'deny', would_deny: true, reason: 'outside_workspace' },
     { at: at(61), tool: 'Edit', target: 'package.json', decision: 'deny', would_deny: true, reason: 'unmanaged' },
   ]);
-  for (const id of ['prj_docs', 'prj_scratch']) guardDecisions.set(id, []);
+  for (const id of ['prj_docs', 'prj_scratch', 'prj_refund']) guardDecisions.set(id, []);
+  guard.set('prj_refund', { policy: 'enforce', installed: true, waiting_hooks: true, would_deny_24h: 0, not_defended: NOT_DEFENDED, unmanaged_sessions: 'allow' });
 
   const rec = (seq: number, min: number, event: string, actor: AuditRecord['actor_scope'], subject: string, detail: string): AuditRecord => ({ seq, at: at(min), event, actor_scope: actor, subject, detail });
   const audit: AuditRecord[] = [
@@ -372,12 +413,13 @@ export function seed(now = Date.now()): MockDb {
   ];
 
   const settings: Settings = {
-    passphrase_set: true, elevation_window_min: 5, listen: '127.0.0.1:7421', lan_enabled: false, max_concurrent: 2, hard_cap: 8, heartbeat_interval_s: 15,
+    passphrase_set: true, elevation_window_min: 5, listen: '127.0.0.1:7421', lan_enabled: false, max_concurrent: 2, hard_cap: 8, heartbeat_interval_s: 15, waiting_max_h: 8,
     log_retention_days: 30, log_max_mb: 10, session_ttl_h: 12, last_backup_at: at(60 * 3), last_backup_bytes: 2_100_000,
   };
 
   return {
     now, signedIn: true, passphraseSet: true, chainBroken: false, resetAlert: false, elevations: new Map(), failures: 0, lockedUntil: 0, projects, details, requirements, workflows, versions,
     reviews, approvals, executions, logs, diffs, contexts, harnesses, guard, guardDecisions, audit, settings, seq: 1284,
+    waiting, layout: { nodes: {}, lines: {} },
   };
 }

@@ -423,3 +423,48 @@ func TestFileURIResolvesRelativePaths(t *testing.T) {
 		t.Fatalf("a relative path became %q", u)
 	}
 }
+
+// Migration 0005 on a database that already holds 1.0.0 data: the rows stay, the new column is empty, the new table
+// takes a wait, and the fork triggers refuse a project that forks itself.
+func TestMigration0005OnAPopulatedDatabase(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "waves.db")
+	w, err := sql.Open("sqlite", dsn(path, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	ms, err := loadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ms) < 5 || ms[4].version != 5 {
+		t.Skip("migration 5 not present")
+	}
+	if err := migrateWith(ctx, w, path, ms[:4]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Exec(`INSERT INTO projects(id, name, path, is_git, is_active, created_at) VALUES ('prj_old','old','/tmp/old',0,1,'2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateWith(ctx, w, path, ms); err != nil {
+		t.Fatalf("0005 on a populated database: %v", err)
+	}
+	var name string
+	var fork sql.NullString
+	if err := w.QueryRow(`SELECT name, fork_of FROM projects WHERE id = 'prj_old'`).Scan(&name, &fork); err != nil || name != "old" || fork.Valid {
+		t.Fatalf("project after migration: %q %v %v", name, fork, err)
+	}
+	if _, err := w.Exec(`UPDATE projects SET fork_of = 'prj_old' WHERE id = 'prj_old'`); err == nil {
+		t.Fatal("a project forked itself")
+	}
+	if _, err := w.Exec(`INSERT INTO projects(id, name, path, is_git, is_active, created_at, fork_of) VALUES ('prj_new','new','/tmp/new',0,0,'2026-01-01T00:00:00Z','prj_old')`); err != nil {
+		t.Fatalf("a fork of a registered project: %v", err)
+	}
+	if _, err := w.Exec(`INSERT INTO projects(id, name, path, is_git, is_active, created_at, fork_of) VALUES ('prj_x','x','/tmp/x',0,0,'2026-01-01T00:00:00Z','prj_missing')`); err == nil {
+		t.Fatal("a fork of an unknown project")
+	}
+	if _, err := w.Exec(`INSERT INTO execution_waits(execution_id, since, source, ended_at, ended_by) VALUES ('exe_none','2026-01-01T00:00:00Z','hook','2026-01-01T00:00:01Z',NULL)`); err == nil {
+		t.Fatal("a wait ended without saying how (or pointing at no execution)")
+	}
+}

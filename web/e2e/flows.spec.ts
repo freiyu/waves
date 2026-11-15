@@ -9,7 +9,7 @@ const open = async (page: Page, hash: string, qs = '') => {
 
 test.describe('approval and step-up', () => {
   test('a result approval needs the passphrase, shows wrong attempts, then succeeds without leaking it', async ({ page }) => {
-    await open(page, '#/approvals/apr_m3t2');
+    await open(page, '#/projects/prj_mobile');
     await page.getByRole('button', { name: 'Approve' }).click();
     const dlg = page.getByRole('dialog');
     await expect(dlg.getByText('Approval requires your passphrase')).toBeVisible();
@@ -19,10 +19,16 @@ test.describe('approval and step-up', () => {
     await expect(dlg.getByText('Wrong passphrase.')).toBeVisible();
     await expect(dlg.getByText('2 attempts left')).toBeVisible();
     await expect(dlg.getByLabel('Approval passphrase')).toHaveValue(''); // cleared after every try
+    const field = dlg.getByLabel('Approval passphrase');
+    await expect(field).toHaveAttribute('aria-invalid', 'true'); // red frame, a cross at its right end, the words below it
+    await expect(dlg.locator('.pw-x')).toBeVisible();
+    expect(await field.evaluate((el) => getComputedStyle(el).borderColor)).not.toBe(await dlg.getByRole('button', { name: 'Cancel' }).evaluate((el) => getComputedStyle(el).borderColor));
+    expect((await dlg.locator('.pw-msg').boundingBox())!.y).toBeGreaterThan((await field.boundingBox())!.y + (await field.boundingBox())!.height - 1);
+    expect(await dlg.locator('.pw').evaluate((el) => getComputedStyle(el).animationName)).toBe('w-shake');
     await dlg.getByLabel('Approval passphrase').fill(PASS);
     await dlg.getByRole('button', { name: 'Approve' }).click();
     await expect(dlg).toBeHidden();
-    await expect(page.getByText('Decided:')).toBeVisible();
+    await expect(page.getByText('Approval recorded')).toBeVisible();
     // Nothing secret reached storage or the URL.
     const leaked = await page.evaluate((p) => JSON.stringify([localStorage, sessionStorage, location.href, document.cookie]).includes(p), PASS);
     expect(leaked).toBe(false);
@@ -31,7 +37,7 @@ test.describe('approval and step-up', () => {
   });
 
   test('Cancel and Escape close the prompt without approving', async ({ page }) => {
-    await open(page, '#/approvals/apr_m3t2');
+    await open(page, '#/projects/prj_mobile');
     await page.getByRole('button', { name: 'Approve' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -41,7 +47,7 @@ test.describe('approval and step-up', () => {
   });
 
   test('Escape and Cancel do nothing while the decision is being sent, and the decision then completes', async ({ page }) => {
-    await page.goto('/?latency=700#/approvals/apr_m3t2');
+    await page.goto('/?latency=700#/projects/prj_mobile');
     await page.getByRole('button', { name: 'Approve' }).click();
     const dlg = page.getByRole('dialog');
     await dlg.getByLabel('Approval passphrase').fill(PASS);
@@ -51,14 +57,15 @@ test.describe('approval and step-up', () => {
     await expect(dlg.getByRole('button', { name: 'Cancel' })).toBeDisabled();
     await expect(dlg).toBeVisible(); // not cancelled while the request is in flight
     await expect(dlg).toBeHidden({ timeout: 8000 });
-    await expect(page.getByText('Decided:')).toBeVisible();
+    await expect(page.getByText('Approval recorded')).toBeVisible();
   });
 
   test('phase completion is decided from the review, and Approve waits for an override reason', async ({ page }) => {
-    await open(page, '#/approvals/apr_d1done');
-    await expect(page.getByRole('link', { name: 'Open phase review' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0); // no shortcut from the inbox
-    await page.getByRole('link', { name: 'Open phase review' }).click();
+    await open(page, '#/projects/prj_docs');
+    const subject = page.getByRole('region', { name: 'Pending approvals', exact: true }).getByRole('link', { name: 'P1 Content audit' }); // the subject is the link to where it is decided
+    await expect(subject).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0); // no shortcut from the Overview
+    await subject.click();
     const approve = page.getByRole('button', { name: 'Approve', exact: true });
     await expect(approve).toBeDisabled();
     await page.getByLabel(/Override reason/).fill('Front matter fix is tracked in the next phase.');
@@ -70,7 +77,7 @@ test.describe('approval and step-up', () => {
   });
 
   test('rate limit and broken audit chain stop the prompt', async ({ page }) => {
-    await open(page, '#/approvals/apr_m3t2', '?scenario=locked');
+    await open(page, '#/projects/prj_mobile', '?scenario=locked');
     await page.getByRole('button', { name: 'Approve' }).click();
     const dlg = page.getByRole('dialog');
     await dlg.getByLabel('Approval passphrase').fill(PASS);
@@ -79,8 +86,10 @@ test.describe('approval and step-up', () => {
     await expect(dlg.getByText(/Try again in 4 min/)).toBeVisible();
     await expect(dlg.getByLabel('Approval passphrase')).toBeDisabled();
 
-    await open(page, '#/approvals/apr_m3t2', '?scenario=chain_broken');
+    await open(page, '#/projects/prj_mobile', '?scenario=chain_broken');
     await expect(page.getByText('The audit chain did not verify').first()).toBeVisible(); // banner on every page
+    await expect(page.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    await open(page, '#/projects/prj_mobile/plan', '?scenario=chain_broken');
     await expect(page.getByRole('button', { name: 'Approve' })).toBeDisabled();
     await expect(page.getByText('Approvals are blocked until the audit chain break is acknowledged')).toBeVisible();
   });
@@ -94,7 +103,7 @@ test.describe('approval and step-up', () => {
   });
 
   test('Elevate unlocks a window, but a phase gate still asks', async ({ page }) => {
-    await open(page, '#/approvals/apr_mwf2');
+    await open(page, '#/projects/prj_mobile/plan');
     await page.getByRole('button', { name: 'Elevate' }).click();
     await page.getByRole('dialog').getByLabel('Approval passphrase').fill(PASS);
     await page.getByRole('dialog').getByRole('button', { name: 'Elevate' }).click();
@@ -103,8 +112,7 @@ test.describe('approval and step-up', () => {
     await expect(page.getByRole('dialog').getByText('Your unlocked window already covers this action')).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
     // A phase gate is not covered by the window: it still asks for the passphrase.
-    await open(page, '#/approvals/apr_d1done');
-    await page.getByRole('link', { name: 'Open phase review' }).click();
+    await open(page, '#/projects/prj_docs/review');
     await page.getByLabel(/Override reason/).fill('Tracked in the next phase.');
     await page.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect(page.getByRole('dialog').getByLabel('Approval passphrase')).toBeVisible();
@@ -210,25 +218,27 @@ test.describe('components', () => {
     expect(errors).toEqual([]);
   });
 
-  test('the current project tab is not a link, and a disabled tab says why', async ({ page }) => {
+  test('the current project tab is not a link; every other tab is, and Review says when there is nothing to review', async ({ page }) => {
     await open(page, '#/projects/prj_billing');
     const nav = page.getByRole('navigation', { name: 'Project pages' });
     await expect(nav.getByRole('link', { name: /^Overview/ })).toHaveCount(0);
     await expect(nav.locator('[aria-current=page]')).toHaveText(/Overview/);
-    await expect(nav.getByText('No phase is waiting for review.')).toHaveCount(1);
-    await nav.locator('[aria-disabled=true]').first().click({ force: true }); // a disabled tab does nothing
-    expect(page.url()).toContain('#/projects/prj_billing');
+    await expect(nav.locator('[aria-disabled=true]')).toHaveCount(0); // no tab is disabled any more: the pane explains itself
+    await nav.getByRole('link', { name: /^Review/ }).click();
+    expect(page.url()).toContain('#/projects/prj_billing/review');
+    await expect(nav.locator('[aria-current=page]')).toHaveText(/Review/);
+    await expect(page.getByText('Nothing to review.')).toBeVisible();
   });
 
   test('Elevate from the account menu asks for the passphrase', async ({ page }) => {
     await open(page, '#/');
-    await page.getByRole('button', { name: /^Human/ }).click();
+    await page.getByRole('button', { name: /^Operator/ }).click();
     await page.getByRole('menuitem', { name: 'Elevate' }).click();
     await expect(page.getByRole('dialog').getByLabel('Approval passphrase')).toBeVisible();
   });
 
   test('a recorded decision says what it was and how it was confirmed', async ({ page }) => {
-    await open(page, '#/approvals/apr_m3t2');
+    await open(page, '#/projects/prj_mobile');
     await page.getByRole('button', { name: 'Approve' }).click();
     await page.getByRole('dialog').getByLabel('Approval passphrase').fill(PASS);
     await page.getByRole('dialog').getByRole('button', { name: 'Approve' }).click();
@@ -240,35 +250,47 @@ test.describe('components', () => {
     await open(page, '#/executions', '?scenario=empty');
     await expect(page.getByText('No executions yet')).toBeVisible();
     await expect(page.getByLabel('Search Executions')).toHaveCount(0);
-    await open(page, '#/workflow/wfv_b3');
+    await open(page, '#/projects/prj_billing/plan');
     const cut = await page.evaluate(() => [...document.querySelectorAll('td[data-key=cmd]')].filter((td) => td.scrollWidth > td.clientWidth + 1 || getComputedStyle(td).textOverflow === 'ellipsis').length);
     expect(cut).toBe(0);
   });
 
-  test('a disabled project tab shows its reason on focus and does nothing on Enter; an enabled Review tab links to the review', async ({ page }) => {
-    await open(page, '#/projects/prj_billing');
-    const nav = page.getByRole('navigation', { name: 'Project pages' });
-    const off = nav.locator('[aria-disabled=true]').first();
-    await off.focus();
-    await expect(page.locator('.tip')).toHaveText('No phase is waiting for review.');
-    await page.keyboard.press('Enter');
-    expect(page.url()).toContain('#/projects/prj_billing');
+  test('the Review tab of a project with a phase to review shows that review, under one h1', async ({ page }) => {
     await open(page, '#/projects/prj_docs');
     const review = page.getByRole('navigation', { name: 'Project pages' }).getByRole('link', { name: /^Review/ });
-    await expect(review).toHaveAttribute('href', /#\/phases\/[^/]+\/review/);
+    await expect(review).toHaveAttribute('href', /#\/projects\/prj_docs\/review/);
     await review.click();
     await expect(page.getByRole('heading', { level: 2, name: /phase review/ })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   });
 
+  test('the panes of a project stay mounted: a filter chosen on Overview is still chosen after a visit to Plan', async ({ page }) => {
+    await open(page, '#/projects/prj_billing');
+    const chip = page.getByLabel('Overview', { exact: true }).getByRole('button', { name: 'Active' });
+    await chip.click();
+    await expect(chip).toHaveAttribute('aria-pressed', 'true');
+    const nav = page.getByRole('navigation', { name: 'Project pages' });
+    await nav.getByRole('link', { name: /^Plan/ }).click();
+    await expect(nav.locator('[aria-current=page]')).toHaveText(/Plan/);
+    await nav.getByRole('link', { name: /^Overview/ }).click();
+    await expect(chip).toHaveAttribute('aria-pressed', 'true'); // the pane was never rebuilt, so the choice is still there
+  });
+
+  test('a hidden pane is not reachable: it is inert and hidden from the accessibility tree', async ({ page }) => {
+    await open(page, '#/projects/prj_billing');
+    const hidden = page.locator('section.pane[aria-hidden=true]');
+    await expect(hidden).toHaveCount(4);
+    for (const el of await hidden.all()) await expect(el).toHaveJSProperty('inert', true);
+  });
+
   test('a rejection, and an approval covered by an elevated window, do not claim a passphrase', async ({ page }) => {
-    await open(page, '#/approvals/apr_m3t2');
-    await page.getByRole('button', { name: 'Reject with feedback' }).click();
+    await open(page, '#/projects/prj_mobile');
+    await page.getByRole('button', { name: /^Reject m3-t2/ }).click();
     await page.getByLabel('Feedback (required)').fill('Needs a retry path.');
     await page.getByRole('dialog').getByRole('button', { name: 'Reject' }).click();
     await expect(page.getByText('Rejection recorded')).toBeVisible();
     await expect(page.getByText(/was rejected\.$/)).toBeVisible();
-    await open(page, '#/approvals/apr_mwf2');
+    await open(page, '#/projects/prj_mobile/plan');
     await page.getByRole('button', { name: 'Elevate' }).click();
     await page.getByRole('dialog').getByLabel('Approval passphrase').fill(PASS);
     await page.getByRole('dialog').getByRole('button', { name: 'Elevate' }).click();
@@ -277,7 +299,7 @@ test.describe('components', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Approve' }).click();
     await expect(page.getByText('Approval recorded')).toBeVisible();
     await expect(page.getByText(/was approved\.$/)).toBeVisible();
-    await expect(page.getByText(/with your passphrase/)).toHaveCount(0);
+    await expect(page.getByRole('region', { name: /Notifications/ }).getByText(/with your passphrase/)).toHaveCount(0); // the toast only; the Guard pane's own text is not the decision
   });
 
   test('adding a requirement refreshes the Sources count and the tab count', async ({ page }) => {
@@ -293,7 +315,8 @@ test.describe('components', () => {
     await expect(page.getByText('Requirement added')).toBeVisible();
     await expect(sources).toHaveText('4');
     await expect(tab).toHaveText('4');
-    await expect(page.getByText('Inline: Refunds are idempotent.')).toBeVisible();
+    // The Overview pane lists the same sources and is mounted too, so the new line is checked inside the Requirements pane.
+    await expect(page.locator('section.pane[aria-label="Requirements"]').getByText('Inline: Refunds are idempotent.').first()).toBeVisible();
   });
 
   test('an offline passphrase reset stays as an alert on Activity until a human acknowledges it', async ({ page }) => {
@@ -322,13 +345,19 @@ test.describe('components', () => {
     await expect(page.getByRole('alert').filter({ hasText: 'The guard is not active here' })).toHaveCount(0);
   });
 
-  test('the Decided tab shows a decided approval, and the state chips hide states with no rows', async ({ page }) => {
-    await open(page, '#/approvals');
-    await page.getByRole('tab', { name: 'Decided' }).click();
-    await expect(page.getByText('Decided:')).toBeVisible();
+  // The approval inbox page was removed by the redesign (decisions live in Projects, the Graph and the Overview), so its Decided tab test went with it.
+  test('the state chips hide states with no rows', async ({ page }) => {
     await open(page, '#/executions');
     await expect(page.getByRole('button', { name: /^Completed/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Waiting Approval/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Waiting approval/ })).toHaveCount(0);
+  });
+
+  test('the old approval inbox and workflow page addresses send the human to the Overview', async ({ page }) => {
+    for (const hash of ['#/approvals', '#/approvals/apr_m3t2', '#/workflow/wfv_b3']) {
+      await open(page, hash);
+      await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+      expect(page.url()).toMatch(/#\/$/);
+    }
   });
 
   test('locked settings and recovery choices confirm with a toast that names them', async ({ page }) => {
@@ -348,9 +377,9 @@ test.describe('components', () => {
     const diff = page.locator('div.diff[aria-label^="Edit to"]');
     await diff.focus();
     await expect(diff).toBeFocused();
-    await open(page, '#/workflow/wfv_b3');
+    await open(page, '#/projects/prj_billing/plan');
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-    await expect(page.getByRole('heading', { level: 2, name: /Workflow review/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: /Workflow · version 3/ })).toBeVisible();
     await expect(page.getByRole('heading', { level: 3, name: /P2 Persistence layer/ })).toBeVisible();
   });
 });
@@ -372,7 +401,7 @@ test.describe('top bar', () => {
 test.describe('register shortcut', () => {
   test('the register link opens the form from another page and while already on Projects', async ({ page }) => {
     await open(page, '#/');
-    await page.getByRole('link', { name: 'Register project' }).click();
+    await page.getByRole('link', { name: 'Register', exact: true }).click();
     await expect(page.getByRole('dialog').getByRole('heading', { name: 'Register a project' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -472,18 +501,31 @@ test.describe('live data', () => {
     await expect(page.getByText(/Paused\. \d+ new lines? below/)).toBeVisible();
   });
 
-  test('an approval decided here updates the badge and inbox without a reload', async ({ page }) => {
-    await open(page, '#/approvals/apr_m3t2');
-    await expect(page.locator('.cnt')).toContainText('3');
-    await page.getByRole('button', { name: 'Reject with feedback' }).click();
+  test('an approval decided here updates the attention badge and the decision count without a reload', async ({ page }) => {
+    await open(page, '#/projects/prj_mobile');
+    const badge = page.getByRole('link', { name: /need attention/ });
+    const n = Number((await badge.innerText()).match(/\d+/)![0]);
+    await page.getByRole('button', { name: /^Reject m3-t2/ }).click();
     await page.getByLabel('Feedback (required)').fill('Needs a retry path.');
     await page.getByRole('dialog').getByRole('button', { name: 'Reject' }).click();
-    await expect(page.locator('.cnt')).toContainText('2');
+    await expect(badge).toContainText(String(n - 1));
+  });
+
+  test('Approve and Reject on the Overview open the same passphrase confirmation, and the decision updates the list', async ({ page }) => {
+    await open(page, '#/');
+    const list = page.getByRole('list', { name: 'Needs your decision' });
+    await expect(list.getByRole('listitem')).toHaveCount(3);
+    await list.getByRole('listitem').filter({ hasText: 'Wire Apple Pay' }).getByRole('button', { name: 'Reject' }).click();
+    const dlg = page.getByRole('dialog');
+    await dlg.getByLabel('Feedback (required)').fill('Needs a retry path.');
+    await dlg.getByRole('button', { name: 'Reject' }).click();
+    await expect(dlg).toBeHidden();
+    await expect(list.getByRole('listitem')).toHaveCount(2);
   });
 });
 
 test.describe('layout and rules', () => {
-  const routes = ['#/', '#/projects', '#/projects/prj_billing', '#/projects/prj_billing/requirements', '#/projects/prj_billing/plan', '#/workflow/wfv_b3', '#/phases/phs_d1/review', '#/approvals', '#/executions', '#/executions/exe_a07e52', '#/executions/exe_8f3a1c/recovery', '#/harnesses', '#/harnesses/connect/prj_docs', '#/activity', '#/settings'];
+  const routes = ['#/', '#/graph', '#/projects/prj_billing/guard', '#/projects/prj_docs/review', '#/projects/prj_mobile', '#/projects', '#/projects/prj_billing', '#/projects/prj_billing/requirements', '#/projects/prj_billing/plan', '#/workflow/wfv_b3', '#/phases/phs_d1/review', '#/approvals', '#/executions', '#/executions/exe_a07e52', '#/executions/exe_8f3a1c/recovery', '#/harnesses', '#/harnesses/connect/prj_docs', '#/activity', '#/settings'];
 
   test('no page scrolls sideways at phone width and nothing leaves the origin', async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -511,7 +553,7 @@ test.describe('layout and rules', () => {
         if (!document.documentElement.lang) out.push('no lang');
         if (document.querySelectorAll('h1').length !== 1) out.push(`h1 count ${document.querySelectorAll('h1').length}`);
         const name = (el: Element) => (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || (el as HTMLElement).innerText?.trim() || ((el as HTMLInputElement).labels?.length ? 'label' : '') || el.getAttribute('title') || '');
-        for (const el of document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea')) if (!name(el)) out.push(`unnamed ${el.tagName} ${el.outerHTML.slice(0, 60)}`);
+        for (const el of document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea')) if (!el.closest('[inert]') && !name(el)) out.push(`unnamed ${el.tagName} ${el.outerHTML.slice(0, 60)}`);
         const ids = [...document.querySelectorAll('[id]')].map((e) => e.id);
         for (const id of new Set(ids.filter((v, i) => ids.indexOf(v) !== i))) out.push(`duplicate id ${id}`);
         for (const t of document.querySelectorAll('table')) if (!t.getAttribute('aria-label')) out.push('table without name');
@@ -528,10 +570,10 @@ test.describe('layout and rules', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
     const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    expect(await bg()).toBe('rgb(10, 11, 13)');
-    await page.getByRole('button', { name: /^Human/ }).click();
-    await page.getByRole('menuitemradio', { name: 'Light' }).click(); // system -> light
-    expect(await bg()).toBe('rgb(245, 246, 248)');
+    expect(await bg()).toBe('rgb(22, 22, 29)');
+    await page.getByRole('button', { name: /^Operator/ }).click();
+    await page.getByRole('menuitemradio', { name: 'Light' }).click(); // system -> light, with a cross-fade
+    await expect.poll(bg).toBe('rgb(243, 238, 227)');
     await ctx.close();
   });
 
@@ -548,8 +590,692 @@ test.describe('layout and rules', () => {
     await expect(page.getByRole('table', { name: 'Executions' }).locator('tbody tr')).toHaveCount(1);
     await page.getByLabel('Search Executions').fill('');
     await page.getByRole('button', { name: /^Completed/ }).click();
-    await expect(page.getByRole('table', { name: 'Executions' }).locator('tbody tr')).toHaveCount(3);
+    await expect(page.getByRole('table', { name: 'Executions' }).locator('tbody tr')).toHaveCount(4);
     await page.getByRole('button', { name: 'Execution', exact: true }).click();
     await expect(page.getByRole('columnheader', { name: /Execution/ })).toHaveAttribute('aria-sort', 'ascending');
+  });
+});
+
+test.describe('graph and icon actions', () => {
+  test('approving a phase from the Graph needs the override reason and the passphrase, and nothing is decided before the dialog', async ({ page }) => {
+    await open(page, '#/graph');
+    await page.getByRole('group', { name: /^P1 Content audit/ }).focus(); // focusing brings an off-screen node into view
+    await page.getByRole('group', { name: /^P1 Content audit/ }).click();
+    await expect(page.getByRole('complementary', { name: 'Phase detail' })).toBeVisible();
+    await expect(page.getByText('Awaiting phase review').first()).toBeVisible(); // still undecided
+    await page.getByRole('complementary', { name: 'Phase detail' }).getByRole('button', { name: 'Approve' }).click();
+    const dlg = page.getByRole('dialog');
+    await expect(dlg.getByText('Approval requires your passphrase')).toBeVisible();
+    await expect(dlg.getByRole('button', { name: 'Approve' })).toBeDisabled(); // no passphrase, no reason yet
+    await dlg.getByLabel(/Override reason/).fill('The build failure is a known front matter issue.');
+    await dlg.getByLabel('Approval passphrase').fill('not the passphrase');
+    await dlg.getByRole('button', { name: 'Approve' }).click();
+    await expect(dlg.getByText('Wrong passphrase.')).toBeVisible();
+    await expect(page.getByText('Approval recorded')).toHaveCount(0);
+    await dlg.getByLabel('Approval passphrase').fill(PASS);
+    await dlg.getByRole('button', { name: 'Approve' }).click();
+    await expect(dlg).toBeHidden();
+    await expect(page.getByText('Approval recorded')).toBeVisible();
+  });
+
+  test('Escape closes the Graph confirmation without approving', async ({ page }) => {
+    await open(page, '#/graph');
+    await page.getByRole('group', { name: /^P1 Content audit/ }).focus(); // focusing brings an off-screen node into view
+    await page.getByRole('group', { name: /^P1 Content audit/ }).click();
+    await page.getByRole('complementary', { name: 'Phase detail' }).getByRole('button', { name: 'Approve' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.getByText('Approval recorded')).toHaveCount(0);
+    await expect(page.getByRole('complementary', { name: 'Phase detail' }).getByRole('button', { name: 'Approve' })).toBeVisible(); // still pending
+  });
+
+  test('approving from the Overview icon asks for the passphrase too', async ({ page }) => {
+    await open(page, '#/');
+    const row = page.getByRole('list', { name: 'Needs your decision' }).getByRole('listitem').filter({ hasText: 'Wire Apple Pay' });
+    await row.getByRole('button', { name: 'Approve' }).click();
+    const dlg = page.getByRole('dialog');
+    await expect(dlg.getByText('Approval requires your passphrase')).toBeVisible();
+    await expect(dlg.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(row).toBeVisible(); // nothing was decided
+  });
+
+  test('a graph node works from the keyboard: Space opens its detail, Enter expands, arrows move it, Escape closes the detail', async ({ page }) => {
+    await open(page, '#/graph');
+    const node = page.getByRole('group', { name: /^P2 Persistence layer/ });
+    await node.focus();
+    const left = () => node.evaluate((el) => parseFloat((el as HTMLElement).style.left));
+    const before = await left();
+    await page.keyboard.press('ArrowRight');
+    expect(await left()).toBe(before + 8);
+    await page.keyboard.press('Shift+ArrowLeft');
+    expect(await left()).toBe(before + 8 - 32);
+    const chev = node.getByRole('button', { name: /Collapse|Expand/ });
+    const open0 = await chev.getAttribute('aria-expanded');
+    await page.keyboard.press('Enter');
+    await expect(chev).toHaveAttribute('aria-expanded', open0 === 'true' ? 'false' : 'true');
+    await page.keyboard.press(' ');
+    await expect(page.getByRole('complementary', { name: 'Phase detail' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('complementary', { name: 'Phase detail' })).toHaveCount(0);
+  });
+
+  test('dragging a node moves its saved position, which survives leaving the page, and never changes the workflow', async ({ page }) => {
+    await open(page, '#/graph');
+    const node = () => page.getByRole('group', { name: /^P3 Payments API/ });
+    const left = () => node().evaluate((el) => parseFloat((el as HTMLElement).style.left));
+    const before = await left();
+    await node().focus();
+    const box = await node().boundingBox();
+    await page.mouse.move(box!.x + 60, box!.y + 12);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + 160, box!.y + 52, { steps: 6 });
+    await page.mouse.up();
+    const moved = await left();
+    expect(moved).toBeGreaterThan(before + 40);
+    await page.evaluate(() => (location.hash = '/projects')); // leave at once: the pending save is flushed
+    await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+    await page.evaluate(() => (location.hash = '/graph'));
+    await expect(node()).toBeVisible();
+    expect(await left()).toBe(moved); // read back from the saved positions
+    await expect(node().getByText('Planned')).toBeVisible(); // its state did not change
+  });
+
+  test('dragging, nudging and expanding nodes asks the service for nothing, also while a phase review is open in the pane', async ({ page }) => {
+    await page.goto('/?tick=0#/graph');
+    await page.getByRole('group', { name: /^P1 Content audit/ }).focus(); // focusing brings an off-screen node into view
+    await page.getByRole('group', { name: /^P1 Content audit/ }).click();
+    await expect(page.getByRole('complementary', { name: 'Phase detail' }).getByText('Requested by')).toBeVisible();
+    await page.waitForTimeout(600);
+    const calls = () => page.evaluate(() => (window as unknown as { __wavesMock: { calls(): number } }).__wavesMock.calls());
+    const before = await calls();
+    const node = page.getByRole('group', { name: /^P3 Payments API/ });
+    await node.focus();
+    const box = await node.boundingBox();
+    await page.mouse.move(box!.x + 60, box!.y + 12);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + 120, box!.y + 40, { steps: 8 });
+    await page.mouse.up();
+    await node.focus();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowDown');
+    await page.getByRole('group', { name: /^P2 Persistence layer/ }).getByRole('button', { name: /Collapse|Expand/ }).click();
+    await page.waitForTimeout(700);
+    // only the position save (a PUT to the mock) may have happened: no read of the review or the approval
+    expect((await calls()) - before).toBeLessThanOrEqual(1);
+  });
+
+  test('the Table view lists the same phases and links to the review', async ({ page }) => {
+    await open(page, '#/graph');
+    await page.getByRole('button', { name: 'Table', exact: true }).click();
+    const list = page.getByRole('list', { name: 'Phases' });
+    await expect(list.getByRole('listitem').filter({ hasText: 'P1 · Content audit' })).toBeVisible();
+    await expect(list.getByRole('link', { name: 'Approve' })).toHaveAttribute('href', /#\/projects\/prj_docs\/review/);
+  });
+
+  test('a project switched off with its chip leaves the graph; a fork sits under the project it came from', async ({ page }) => {
+    await open(page, '#/graph');
+    const tags = page.locator('.gtag b');
+    await expect(tags.first()).toBeVisible();
+    const names = await tags.allInnerTexts();
+    expect(names.indexOf('billing-api-refund')).toBe(names.indexOf('billing-api') + 1);
+    await page.getByRole('button', { name: 'docs-site' }).click();
+    await expect(page.getByRole('button', { name: 'docs-site' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.gtag b', { hasText: 'docs-site' })).toHaveCount(0);
+  });
+});
+
+test.describe('motion', () => {
+  test('an icon action rolls its label out to the left and pushes the buttons on its left away instead of covering them', async ({ page }) => {
+    await open(page, '#/');
+    await page.waitForTimeout(700); // the rows rise in 30 ms apart; measure once they have settled
+    const row = page.getByRole('list', { name: 'Needs your decision' }).getByRole('listitem').first();
+    const approve = row.getByRole('button', { name: /^Approve/ });
+    const reject = row.getByRole('button', { name: /^Reject/ });
+    const [a0, r0] = [await approve.boundingBox(), await reject.boundingBox()];
+    expect(r0!.width).toBe(36);
+    await reject.hover(); // the right-hand button grows to the left
+    await page.waitForTimeout(400);
+    const [a1, r1] = [await approve.boundingBox(), await reject.boundingBox()];
+    expect(r1!.width).toBeGreaterThan(70); // it rolled out
+    expect(r1!.x + r1!.width).toBeCloseTo(r0!.x + r0!.width, 0); // its right edge stays
+    expect(a1!.x).toBeLessThan(a0!.x - 20); // the button on its left was pushed left
+    expect(a1!.x + a1!.width).toBeLessThanOrEqual(r1!.x + 0.5); // and is not covered
+    await page.mouse.move(2, 2);
+    await page.waitForTimeout(400);
+    expect((await reject.boundingBox())!.width).toBe(36); // it folds back
+  });
+
+  test('buttons give under the press, and links draw their underline on hover', async ({ page }) => {
+    await open(page, '#/');
+    await page.waitForTimeout(700);
+    const link = page.locator('a.tlink').first();
+    await link.hover();
+    await page.waitForTimeout(350);
+    expect(await link.evaluate((el) => getComputedStyle(el).backgroundSize)).toMatch(/100%/);
+    const btn = page.getByRole('button', { name: 'Elevate' });
+    const box = (await btn.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(250);
+    expect(await btn.evaluate((el) => getComputedStyle(el).transform)).toMatch(/matrix\(0\.97/);
+    await page.mouse.move(2, 2); // leave before releasing: no click
+    await page.mouse.up();
+  });
+
+  test('with reduced motion nothing animates or transitions', async ({ browser }) => {
+    const ctx = await browser.newContext({ reducedMotion: 'reduce' });
+    const page = await ctx.newPage();
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    const probe = await page.evaluate(() => {
+      const all = [...document.querySelectorAll('*')];
+      const moving = all.filter((el) => {
+        const cs = getComputedStyle(el);
+        return (cs.animationName !== 'none' && parseFloat(cs.animationDuration) > 0.001) || (parseFloat(cs.transitionDuration) > 0.001);
+      });
+      return moving.length;
+    });
+    expect(probe).toBe(0);
+    await ctx.close();
+  });
+
+  test('a pane switch crossfades: both panes are in the same grid cell and only the active one is visible', async ({ page }) => {
+    await open(page, '#/projects/prj_billing');
+    const panes = page.locator('section.pane');
+    await expect(panes).toHaveCount(5);
+    const cells = await panes.evaluateAll((els) => els.map((e) => getComputedStyle(e).gridArea));
+    expect(new Set(cells).size).toBe(1);
+    await expect(page.locator('section.pane[data-active=true]')).toHaveCount(1);
+  });
+
+  test('moving between the panes of a project asks the service for nothing', async ({ page }) => {
+    await page.goto('/?tick=0#/projects/prj_billing');
+    await expect(page.getByRole('heading', { level: 1, name: 'billing-api' })).toBeVisible();
+    await page.waitForFunction(() => !document.querySelector('[aria-label^="Loading"]:not([inert] *)'));
+    await page.waitForTimeout(500);
+    const calls = () => page.evaluate(() => (window as unknown as { __wavesMock: { calls(): number } }).__wavesMock.calls());
+    const before = await calls();
+    const nav = page.getByRole('navigation', { name: 'Project pages' });
+    for (const tab of ['Requirements', 'Plan', 'Review', 'Guard', 'Overview']) {
+      await nav.getByRole('link', { name: new RegExp('^' + tab) }).click();
+      await expect(nav.locator('[aria-current=page]')).toHaveText(new RegExp(tab));
+    }
+    await page.waitForTimeout(400);
+    expect(await calls()).toBe(before);
+  });
+});
+
+test.describe('review fixes', () => {
+  test('the decision stat card scrolls to the list and never leaves the Overview', async ({ page }) => {
+    await open(page, '#/');
+    await page.getByRole('button', { name: /Needs your decision/ }).first().click();
+    expect(page.url()).toMatch(/#\/$/);
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+  });
+
+  test('with a broken audit chain the Approve and Reject icons are disabled', async ({ page }) => {
+    await open(page, '#/', '?scenario=chain_broken');
+    const row = page.getByRole('list', { name: 'Needs your decision' }).getByRole('listitem').first();
+    await expect(row.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    await expect(row.getByRole('button', { name: 'Reject' })).toBeDisabled();
+  });
+
+  test('a phase completion started from the Overview asks for the override reason at once, together with the passphrase', async ({ page }) => {
+    await open(page, '#/');
+    const row = page.getByRole('list', { name: 'Needs your decision' }).getByRole('listitem').filter({ hasText: 'Content audit' });
+    await row.getByRole('button', { name: 'Approve' }).click();
+    const dlg = page.getByRole('dialog');
+    await expect(dlg.getByLabel(/Override reason/)).toBeVisible();
+    await dlg.getByLabel('Approval passphrase').fill(PASS);
+    await expect(dlg.getByRole('button', { name: 'Approve' })).toBeDisabled(); // the reason is still empty
+    await dlg.getByLabel(/Override reason/).fill('Known front matter issue.');
+    await expect(dlg.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  test('a project page has no Open button: the decision text is the link', async ({ page }) => {
+    await open(page, '#/projects/prj_billing');
+    await expect(page.getByRole('button', { name: /^Open/ })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Decide what happens to p2-t3/ })).toHaveAttribute('href', /#\/executions\//);
+  });
+
+  test('running text is capped at 65 characters', async ({ page }) => {
+    await open(page, '#/executions/exe_8f3a1c/recovery');
+    const w = await page.locator('.note > div').first().evaluate((el) => el.getBoundingClientRect().width);
+    const ch = await page.locator('.note > div').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(w).toBeLessThanOrEqual(ch * 65);
+  });
+
+  test('the graph starts at a readable zoom and keeps its zoom bar clear of the groups', async ({ page }) => {
+    await open(page, '#/graph');
+    await expect(page.getByLabel('Zoom').getByText(/%$/)).toBeVisible();
+    const pct = Number((await page.getByLabel('Zoom').locator('.mono').innerText()).replace('%', ''));
+    expect(pct).toBeGreaterThanOrEqual(80);
+  });
+});
+
+test.describe('second round of directions', () => {
+  test('the status column sits next to the name in every table, at the same x', async ({ page }) => {
+    await open(page, '#/');
+    await page.waitForTimeout(700);
+    const xs = await page.locator('.drow li .badge, li.drow .badge, li.erow .badge').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));
+    expect(xs.length).toBeGreaterThan(3);
+    expect(new Set(xs).size).toBeLessThanOrEqual(2); // the two tables share one status x
+    const panel = await page.locator('.cols .panel').first().boundingBox();
+    expect(Math.min(...xs)).toBeLessThan(panel!.x + 420); // near the name, not at the far right
+  });
+
+  test('the main pages have a title and no description; a project keeps its path and branch', async ({ page }) => {
+    for (const r of ['#/', '#/executions', '#/projects', '#/harnesses', '#/activity', '#/settings']) {
+      await open(page, r);
+      await expect(page.locator('.head > div:first-child > .muted')).toHaveCount(0); // nothing under the title
+    }
+    await open(page, '#/projects/prj_billing');
+    await expect(page.locator('.head > div:first-child > .muted').first()).toContainText('~/work/billing-api');
+  });
+
+  test('switching theme cross-fades and ends in the other palette; with reduced motion it switches at once', async ({ browser }) => {
+    const ctx = await browser.newContext({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const page = await ctx.newPage();
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    await page.getByRole('button', { name: /^Operator/ }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(22, 22, 29)'); // no animation, no wait
+    await ctx.close();
+    const ctx2 = await browser.newContext({ colorScheme: 'light' });
+    const p2 = await ctx2.newPage();
+    await p2.goto('/');
+    await p2.getByRole('button', { name: /^Operator/ }).click();
+    await p2.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect.poll(() => p2.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(22, 22, 29)');
+    await ctx2.close();
+  });
+
+  test('on the Graph the sidebar thins to the logo and opens on hover', async ({ page }) => {
+    await open(page, '#/graph');
+    const side = page.locator('aside.side');
+    await page.mouse.move(700, 400);
+    await page.waitForTimeout(400);
+    expect((await side.boundingBox())!.width).toBeLessThan(80);
+    expect(await page.getByRole('link', { name: 'Projects', exact: true }).evaluate((el) => getComputedStyle(el.closest('nav')!).opacity)).toBe('1'); // the icons stay while thin
+    await side.hover();
+    await page.waitForTimeout(400);
+    expect((await side.boundingBox())!.width).toBeGreaterThan(200);
+    await open(page, '#/projects');
+    expect((await page.locator('aside.side').boundingBox())!.width).toBeGreaterThan(200); // other pages keep the full sidebar
+  });
+
+  test('a project frame shows only its name, and the frames can be hidden', async ({ page }) => {
+    await open(page, '#/graph');
+    const tag = page.locator('.gtag').first();
+    await expect(tag).toHaveText('billing-api');
+    await expect(page.locator('.group')).toHaveCount(4);
+    await page.getByLabel('Show project frames').uncheck();
+    await expect(page.locator('.group')).toHaveCount(0);
+    await expect(page.locator('.node').first()).toBeVisible(); // the phases stay
+  });
+
+  test('the Graph fills the panel and its tools open and close from a pane on the right', async ({ page }) => {
+    await open(page, '#/graph');
+    const canvas = await page.locator('.canvas').boundingBox();
+    const tools = page.getByRole('complementary', { name: 'Graph tools' });
+    await expect(tools).toBeVisible();
+    const toggle = page.getByRole('button', { name: 'Tools', exact: true });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await toggle.click();
+    await expect(tools).toHaveCount(0);
+    const wide = await page.locator('.canvas').boundingBox();
+    expect(wide!.width).toBeGreaterThan(canvas!.width + 200); // the canvas takes the room (a 48 px strip stays)
+    await page.getByRole('button', { name: 'Tools', exact: true }).click();
+    await expect(tools).toBeVisible();
+    const vh = page.viewportSize()!.height;
+    expect((await page.locator('.gfull').boundingBox())!.height).toBeGreaterThan(vh - 130); // full height, no page heading above it
+  });
+
+  test('a phase or task detail opens on the left of the tools pane, touching it', async ({ page }) => {
+    await open(page, '#/graph');
+    await page.getByRole('group', { name: /^P2 Persistence layer/ }).focus();
+    await page.keyboard.press(' '); // Space opens the phase detail (a click in the middle of the card may hit a task row)
+    const phase = page.getByRole('complementary', { name: 'Phase detail' });
+    await expect(phase).toBeVisible();
+    const tools = page.locator('.gside'); // the tools column, border included
+    const [pb, tb] = [await phase.boundingBox(), await tools.boundingBox()];
+    expect(Math.round(pb!.x + pb!.width)).toBe(Math.round(tb!.x)); // touching
+    await page.getByRole('button', { name: /^p2-t3 / }).click(); // a task row
+    const task = page.getByRole('complementary', { name: 'Task detail' });
+    await expect(task).toBeVisible();
+    await expect(task.getByText('Depends on')).toBeVisible();
+    const [kb, tb2] = [await task.boundingBox(), await tools.boundingBox()];
+    expect(Math.round(kb!.x + kb!.width)).toBe(Math.round(tb2!.x));
+    await task.getByRole('button', { name: /^Back to/ }).click();
+    await expect(page.getByRole('complementary', { name: 'Phase detail' })).toBeVisible();
+  });
+
+  test('a line can leave and enter any side of its phases, from the tools or by dragging its end', async ({ page }) => {
+    await open(page, '#/graph');
+    await page.getByText(/^Line sides \(/).click(); // the list is a disclosure, closed by default
+    const path = () => page.locator('svg.edges path').first().getAttribute('d');
+    const before = await path();
+    await page.getByLabel('Start side, line P1 to P2 in billing-api', { exact: true }).selectOption('bottom');
+    await page.getByLabel('End side, line P1 to P2 in billing-api', { exact: true }).selectOption('top');
+    const after = await path();
+    expect(after).not.toBe(before);
+    // drag the first end circle round its node to the top side
+    const hit = page.locator('svg.edges circle.hit').first();
+    const hb = await hit.boundingBox();
+    const node = await page.getByRole('group', { name: /^P1 Schema design/ }).boundingBox();
+    await page.mouse.move(hb!.x + hb!.width / 2, hb!.y + hb!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(node!.x + node!.width / 2, node!.y - 6, { steps: 8 });
+    await page.mouse.up();
+    await expect(page.getByLabel('Start side, line P1 to P2 in billing-api', { exact: true })).toHaveValue('top');
+    await page.getByRole('button', { name: 'Reset lines' }).click();
+    await expect(page.getByLabel('Start side, line P1 to P2 in billing-api', { exact: true })).toHaveValue('right');
+  });
+
+  test('a direct visit to the Graph opens the running phases, as a visit from another page does', async ({ page }) => {
+    await page.goto('/#/graph');
+    await expect(page.getByRole('group', { name: /^P2 Persistence layer/ }).getByRole('button', { name: /Collapse/ })).toBeVisible();
+  });
+
+  test('a project switched off everywhere leaves a message, not a blank canvas', async ({ page }) => {
+    await open(page, '#/graph');
+    for (const n of ['billing-api', 'mobile-checkout', 'docs-site', 'billing-api-refund']) await page.getByRole('button', { name: n, exact: true }).click();
+    await expect(page.getByText(/No project is drawn/)).toBeVisible();
+  });
+
+  test('selecting a phase keeps it in view although the detail pane takes room', async ({ page }) => {
+    await open(page, '#/graph');
+    const node = page.getByRole('group', { name: /^P4 Hardening/ });
+    await node.focus();
+    await page.keyboard.press(' ');
+    await expect(page.getByRole('complementary', { name: 'Phase detail' })).toBeVisible();
+    await page.waitForTimeout(500);
+    const nb = (await node.boundingBox())!;
+    const pane = (await page.getByRole('complementary', { name: 'Phase detail' }).boundingBox())!;
+    expect(nb.x + nb.width).toBeLessThanOrEqual(pane.x + 1); // not hidden under the pane
+  });
+
+  test('the tools toggle stays on the right edge, as a strip while closed', async ({ page }) => {
+    await open(page, '#/graph');
+    await page.getByRole('button', { name: 'Tools', exact: true }).click();
+    const strip = page.locator('.gside');
+    await expect(strip).toBeVisible();
+    const sb = (await strip.boundingBox())!;
+    const full = (await page.locator('.gfull').boundingBox())!;
+    expect(Math.round(sb.x + sb.width)).toBe(Math.round(full.x + full.width));
+  });
+
+  test('the rail sidebar stays open while its account menu is open, and opens from the keyboard', async ({ page }) => {
+    await open(page, '#/graph');
+    const side = page.locator('aside.side');
+    await page.keyboard.press('Tab'); // skip link
+    await page.getByRole('link', { name: /Waves, overview/ }).focus();
+    await page.waitForTimeout(400);
+    expect((await side.boundingBox())!.width).toBeGreaterThan(200); // focus alone opens it
+    await page.getByRole('button', { name: /^Operator/ }).click({ force: true });
+    await page.mouse.move(700, 400); // the pointer leaves the sidebar into the open menu
+    await expect(page.getByRole('menu')).toBeVisible();
+    await page.waitForTimeout(400);
+    expect((await side.boundingBox())!.width).toBeGreaterThan(200); // it does not thin under the open menu
+  });
+
+  test('a line that leaves the bottom of a phase starts at its real bottom edge, and the choice survives leaving the page', async ({ page }) => {
+    await open(page, '#/graph');
+    await page.getByText(/^Line sides \(/).click();
+    await page.getByLabel('Start side, line P1 to P2 in billing-api', { exact: true }).selectOption('bottom');
+    const node = page.getByRole('group', { name: /^P1 Schema design/ });
+    const nb = (await node.boundingBox())!;
+    const start = await page.locator('svg.edges circle.port').first().boundingBox();
+    expect(Math.abs(start!.y + start!.height / 2 - (nb.y + nb.height))).toBeLessThan(3); // on the card's bottom border, whatever its height
+    await page.waitForTimeout(500);
+    await page.evaluate(() => (location.hash = '/projects'));
+    await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+    await page.evaluate(() => (location.hash = '/graph'));
+    await page.getByText(/^Line sides \(/).click();
+    await expect(page.getByLabel('Start side, line P1 to P2 in billing-api', { exact: true })).toHaveValue('bottom');
+  });
+
+  test('the Graph draws without a script or SVG error, on a direct visit and after a change of view', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push('pageerror ' + e.message));
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    await page.goto('/#/graph');
+    await expect(page.locator('.node').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Table', exact: true }).click();
+    await page.getByRole('button', { name: 'Graph', exact: true }).click();
+    await expect(page.locator('.node').first()).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('a line end slides along the edge of its phase instead of snapping, and keeps its place after a reload of the layout', async ({ page }) => {
+    await open(page, '#/graph');
+    const hit = page.locator('svg.edges circle.hit').first(); // start of P1 to P2, on the right side of P1
+    const node = (await page.getByRole('group', { name: /^P1 Schema design/ }).boundingBox())!;
+    const hb = (await hit.boundingBox())!;
+    const cx = hb.x + hb.width / 2, cy = hb.y + hb.height / 2;
+    const ys: number[] = [];
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    for (const f of [0.25, 0.4, 0.7]) {
+      await page.mouse.move(node.x + node.width + 2, node.y + node.height * f, { steps: 4 });
+      ys.push(Math.round(((await page.locator('svg.edges circle.port').first().boundingBox())!.y)));
+    }
+    await page.mouse.up();
+    expect(new Set(ys).size).toBe(3); // a different place for each position, not one of four snap points
+    await page.getByText(/^Line sides \(/).click();
+    await expect(page.getByLabel('Start side, line P1 to P2 in billing-api', { exact: true })).toHaveValue('right');
+  });
+
+  test('the tools slide: halfway through, the column is between its open and closed widths', async ({ page }) => {
+    await open(page, '#/graph');
+    const side = page.locator('.gside');
+    const open0 = (await side.boundingBox())!.width;
+    await page.getByRole('button', { name: 'Tools', exact: true }).click();
+    await page.waitForTimeout(60);
+    const mid = (await side.boundingBox())!.width;
+    expect(mid).toBeLessThan(open0);
+    expect(mid).toBeGreaterThan(48);
+    await page.waitForTimeout(500);
+    expect((await side.boundingBox())!.width).toBe(48);
+    await expect(page.getByRole('button', { name: 'Tools', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('the thin rail keeps its icons, and the Graph has no title text in its corner', async ({ page }) => {
+    await open(page, '#/graph');
+    const side = page.locator('aside.side');
+    await page.mouse.move(700, 400);
+    await page.waitForTimeout(400);
+    expect((await side.boundingBox())!.width).toBeLessThan(80);
+    for (const n of ['Overview', 'Graph', 'Projects', 'Executions', 'Harnesses', 'Activity', 'Settings']) {
+      const link = side.getByRole('link', { name: new RegExp('^' + n) });
+      await expect(link.locator('svg')).toBeVisible();
+      expect(await link.evaluate((el) => Number(getComputedStyle(el).opacity))).toBe(1);
+    }
+    await expect(page.locator('.gtitle')).toHaveCount(0);
+  });
+
+  test('the detail pane slides in and out, and keeps its content while it leaves', async ({ page }) => {
+    await open(page, '#/graph');
+    const col = page.locator('.gdetail');
+    expect((await col.boundingBox())!.width).toBe(0);
+    await page.getByRole('group', { name: /^P2 Persistence layer/ }).focus();
+    await page.keyboard.press(' ');
+    await page.waitForTimeout(60);
+    const mid = (await col.boundingBox())!.width;
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(341);
+    await page.waitForTimeout(400);
+    expect((await col.boundingBox())!.width).toBe(341);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(60);
+    await expect(page.locator('.gpane h2').first()).toContainText('Persistence layer'); // still showing it while it slides out
+    await page.waitForTimeout(400);
+    expect((await col.boundingBox())!.width).toBe(0);
+    await expect(page.getByRole('complementary', { name: 'Phase detail' })).toBeHidden();
+  });
+
+  test('the thin rail shows no piece of a label or of the name, only icons and the mark', async ({ page }) => {
+    await open(page, '#/graph');
+    await page.mouse.move(700, 400);
+    await page.waitForTimeout(500);
+    const side = page.locator('aside.side');
+    for (const sel of ['.lbl', '.lg-word', '.acc-text']) {
+      const boxes = await side.locator(sel).evaluateAll((els) => els.map((e) => { const cs = getComputedStyle(e); return [Number(cs.opacity), e.getBoundingClientRect().width]; }));
+      for (const [op, w] of boxes) expect(op === 0 || w === 0, sel).toBe(true);
+    }
+    expect(await side.locator('.lg-mark svg').first().evaluate((e) => e.getBoundingClientRect().height)).toBeLessThanOrEqual(24);
+  });
+
+  test('project overview: the four side cards sit in a row under the phases, above the tasks, all in the first screen', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, '#/projects/prj_mobile');
+    const phases = (await page.getByRole('region', { name: 'Phases' }).boundingBox())!;
+    const names = ['Next step', 'Harness', 'Pending approvals', 'Requirements'];
+    const boxes = [];
+    for (const n of names) boxes.push((await page.getByRole('region', { name: n, exact: true }).boundingBox())!);
+    const tasks = (await page.getByRole('region', { name: /^Tasks in/ }).boundingBox())!;
+    for (const b of boxes) {
+      expect(b.y).toBeGreaterThanOrEqual(phases.y + phases.height); // under Phases
+      expect(Math.round(b.y)).toBe(Math.round(boxes[0]!.y)); // level with each other
+      expect(b.y + b.height).toBeLessThanOrEqual(900); // no scrolling to see them
+      expect(b.y + b.height).toBeLessThanOrEqual(tasks.y);
+    }
+  });
+
+  test('Add requirement and Request planning sit at the right end of their table header', async ({ page }) => {
+    await open(page, '#/projects/prj_mobile/requirements');
+    const head = (await page.getByRole('region', { name: 'Sources' }).locator('.ph').boundingBox())!;
+    const add = (await page.getByRole('button', { name: 'Add requirement' }).boundingBox())!;
+    expect(add.y).toBeGreaterThanOrEqual(head.y);
+    expect(add.y + add.height).toBeLessThanOrEqual(head.y + head.height);
+    expect(Math.round(head.x + head.width - (add.x + add.width))).toBeLessThanOrEqual(24);
+    await open(page, '#/projects/prj_mobile/plan');
+    const ph = (await page.getByRole('region', { name: 'Planning request' }).locator('.ph').boundingBox())!;
+    const rq = (await page.getByRole('button', { name: 'Request planning' }).boundingBox())!;
+    expect(rq.y + rq.height).toBeLessThanOrEqual(ph.y + ph.height);
+    expect(Math.round(ph.x + ph.width - (rq.x + rq.width))).toBeLessThanOrEqual(24);
+  });
+
+  test('Overview: the decisions table and the right-hand card start at the same height', async ({ page }) => {
+    await open(page, '#/');
+    const left = (await page.getByRole('region', { name: 'Needs your decision' }).boundingBox())!;
+    const right = (await page.getByRole('region', { name: 'Harnesses waiting for you' }).boundingBox())!;
+    expect(Math.round(left.y)).toBe(Math.round(right.y));
+  });
+
+  test('the fork label: shown as a badge, changed in a dialog that offers no loop and no no-op save', async ({ page }) => {
+    await open(page, '#/projects/prj_refund');
+    await expect(page.getByText('Fork of billing-api').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Fork', exact: true }).click();
+    const dlg = page.getByRole('dialog');
+    await expect(dlg.getByRole('heading', { name: 'Change the original of billing-api-refund' })).toBeVisible();
+    await expect(dlg.getByRole('button', { name: 'Save' })).toBeDisabled(); // nothing changed
+    await dlg.getByLabel('Original project').selectOption('');
+    await dlg.getByRole('button', { name: 'Save' }).click();
+    await expect(dlg).toBeHidden();
+    await expect(page.getByText('Fork of billing-api')).toHaveCount(0);
+    // billing-api is the original of nothing now, and billing-api-refund is not offered as the original of billing-api once it is a fork of it
+    await page.getByRole('button', { name: 'Fork', exact: true }).click();
+    await page.getByLabel('Original project').selectOption({ label: 'billing-api' });
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Fork of billing-api').first()).toBeVisible();
+    await open(page, '#/projects/prj_billing');
+    await page.getByRole('button', { name: 'Fork', exact: true }).click();
+    const options = await page.getByLabel('Original project').locator('option').allTextContents();
+    expect(options).not.toContain('billing-api-refund');
+    expect(options).toContain('mobile-checkout');
+  });
+
+  test('Executions says one thing about a waiting harness: the table, the filter and the count agree', async ({ page }) => {
+    await open(page, '#/executions');
+    const row = page.getByRole('row', { name: /Refund validation rules/ });
+    await expect(row.getByText('Waiting for instruction')).toBeVisible();
+    await expect(row.getByText('Running')).toHaveCount(0);
+    await page.getByRole('button', { name: /^Waiting for instruction/ }).first().click();
+    await expect(page.getByRole('row', { name: /Refund validation rules/ })).toBeVisible();
+    await expect(page.getByRole('row', { name: /Implement refund endpoint/ })).toHaveCount(0);
+  });
+
+  test('a project connected before the waiting hooks existed says so, and a fresh connection does not', async ({ page }) => {
+    await open(page, '#/harnesses');
+    // billing-api is the seed's old connection (guard hook, no waiting hooks)
+    await expect(page.getByText('Waiting for instruction is not active here.')).toBeVisible();
+    await expect(page.getByText('Waiting for instruction is not active here.')).toHaveCount(1);
+  });
+
+  test('Settings has a place for the longest wait, behind the passphrase', async ({ page }) => {
+    await open(page, '#/settings');
+    await expect(page.getByText('Longest wait for instruction')).toBeVisible();
+    await expect(page.getByText(/may wait up to 8 h/)).toBeVisible();
+  });
+
+  test('the Harnesses notice offers Connect again, which opens the plan', async ({ page }) => {
+    await open(page, '#/harnesses');
+    await page.getByRole('link', { name: 'Connect again' }).click();
+    await expect(page).toHaveURL(/#\/harnesses\/connect\/prj_billing/);
+  });
+});
+
+
+test.describe('stage 6: pages merged into the project', () => {
+  test('the Plan pane holds the workflow: submit a draft, pick another version, decide it where it waits', async ({ page }) => {
+    await open(page, '#/projects/prj_billing/plan');
+    await expect(page.getByRole('heading', { level: 2, name: /Workflow · version 3/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible(); // version 3 is a draft
+    await page.getByRole('button', { name: 'Version 2' }).click();
+    await expect(page.getByRole('heading', { level: 2, name: /Workflow · version 2/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Revise' })).toBeVisible(); // version 2 is approved
+    await open(page, '#/projects/prj_mobile/plan');
+    await expect(page.getByRole('region', { name: /Workflow · mobile-checkout/ })).toBeVisible(); // the waiting version carries its own decision
+    await expect(page.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  test('the Guard pane tells the state of the guard and what it does not defend', async ({ page }) => {
+    await open(page, '#/projects/prj_billing/guard');
+    await expect(page.getByRole('region', { name: 'Guard status' })).toContainText('What this does not defend');
+    await expect(page.getByRole('region', { name: 'Guard status' })).toContainText(/Policy: (audit|enforce|off)/);
+  });
+
+  test('the Graph names a project whose proposal waits, and the link goes to its Plan pane', async ({ page }) => {
+    await open(page, '#/graph');
+    const link = page.getByRole('link', { name: /Proposal ready/ });
+    await expect(link).toHaveAttribute('href', /#\/projects\/prj_mobile\/plan$/);
+  });
+
+  test('a tab panel that takes keyboard focus shows a focus ring, and the page asks for the full screen on a phone', async ({ page }) => {
+    await open(page, '#/harnesses');
+    const panel = page.getByRole('tabpanel').first();
+    await panel.focus();
+    expect(await panel.evaluate((el) => getComputedStyle(el).outlineStyle)).not.toBe('none');
+    expect(await page.locator('meta[name=viewport]').getAttribute('content')).toContain('viewport-fit=cover');
+  });
+
+  test('a hidden pane gives back its height: the Overview is not as tall as the Plan', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await open(page, '#/projects/prj_billing/plan');
+    await expect(page.getByRole('heading', { level: 2, name: /Workflow · version/ })).toBeVisible(); // the tall pane is loaded
+    const plan = (await page.locator('.panes').boundingBox())!.height;
+    await page.getByRole('navigation', { name: 'Project pages' }).getByRole('link', { name: /^Overview/ }).click();
+    await expect.poll(async () => (await page.locator('.panes').boundingBox())!.height).toBeLessThan(plan - 200);
+  });
+
+  test('inside a project the Guard pane has its own head, no way back to Harnesses, and keeps the policy note honest', async ({ page }) => {
+    await open(page, '#/projects/prj_billing/guard');
+    await expect(page.getByRole('heading', { level: 2, name: 'Guard', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole('link', { name: 'Connect' })).toHaveCount(0); // no second breadcrumb
+    await expect(page.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+  });
+
+  test('the confirmation of an icon decision shows everything the approval carries, not only its phase', async ({ page }) => {
+    await open(page, '#/projects/prj_mobile');
+    await page.getByRole('button', { name: /^Approve m3-t2/ }).click();
+    const dlg = page.getByRole('dialog');
+    await expect(dlg.getByText('Execution', { exact: true })).toBeVisible(); // a fact the agent's result carries
+    await expect(dlg.getByText('exe_b220f1')).toBeVisible();
+    await expect(dlg.getByText('Task', { exact: true })).toBeVisible();
   });
 });

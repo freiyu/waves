@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,21 +49,45 @@ func targetPath(tool string, in json.RawMessage) string {
 // projectForCwd finds the registered project whose root contains cwd (after
 // symlink resolution), preferring the deepest root.
 func (s *Service) projectForCwd(ctx context.Context, cwd string) (id, root, policy, unmanaged string) {
+	id, root, policy, unmanaged, _ = s.projectForCwdErr(ctx, cwd)
+	return
+}
+
+// projectForCwdErr is projectForCwd that also says when the database could not be read (a folder that does not exist is not an error).
+func (s *Service) projectForCwdErr(ctx context.Context, cwd string) (id, root, policy, unmanaged string, dberr error) {
 	real, err := filepath.EvalSymlinks(cwd)
 	if err != nil {
 		return
 	}
 	rows, err := s.db.R.QueryContext(ctx, `SELECT p.id, p.path, ps.guard_policy, ps.unmanaged_sessions FROM projects p JOIN project_settings ps ON ps.project_id = p.id WHERE p.removed_at IS NULL`)
 	if err != nil {
+		dberr = err
 		return
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var i, r, pol, un string
-		rows.Scan(&i, &r, &pol, &un)
+		if err := rows.Scan(&i, &r, &pol, &un); err != nil {
+			dberr = err
+			return
+		}
 		if rel, err := filepath.Rel(r, real); err == nil && rel != ".." && !strings.HasPrefix(rel, "../") && len(r) > len(root) {
 			id, root, policy, unmanaged = i, r, pol, un
 		}
+	}
+	dberr = rows.Err()
+	return
+}
+
+// leaseProject is the project of the (first) active lease bound to a session, with its guard settings.
+func (s *Service) leaseProject(ctx context.Context, session string) (id, root, policy, unmanaged string, dberr error) {
+	if session == "" {
+		return
+	}
+	err := s.db.R.QueryRowContext(ctx, `SELECT p.id, p.path, ps.guard_policy, ps.unmanaged_sessions FROM leases l JOIN projects p ON p.id = l.project_id JOIN project_settings ps ON ps.project_id = p.id
+		WHERE l.session_id = ? AND l.revoked_at IS NULL AND l.expires_at > ? AND p.removed_at IS NULL ORDER BY l.rowid LIMIT 1`, session, s.ts()).Scan(&id, &root, &policy, &unmanaged)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		dberr = err
 	}
 	return
 }
@@ -85,7 +110,15 @@ func (s *Service) DecideGuard(ctx context.Context, p Principal, ev HookEvent) (G
 			where = nearestExisting(t)
 		}
 	}
-	project, root, policy, unmanaged := s.projectForCwd(ctx, where)
+	project, root, policy, unmanaged, dberr := s.projectForCwdErr(ctx, where)
+	if project == "" && dberr == nil {
+		// A session that holds a lease is bound to that lease's project even when its cwd drifted out of every project: a
+		// write to a path outside the workspace is still outside it, not "not a project".
+		project, root, policy, unmanaged, dberr = s.leaseProject(ctx, ev.SessionID)
+	}
+	if dberr != nil {
+		return GuardDecision{}, wrap(dberr, "read projects for the guard") // an error answer: the hook denies under enforce
+	}
 	if project == "" {
 		return GuardDecision{Decision: "allow", Reason: "not_a_project", Policy: "off"}, nil
 	}
@@ -101,6 +134,11 @@ func (s *Service) DecideGuard(ctx context.Context, p Principal, ev HookEvent) (G
 	err := s.tx(ctx, func(t *Tx) error {
 		if strings.HasPrefix(ev.ToolName, "mcp__waves__") && ev.ToolUseID != "" && ev.SessionID != "" {
 			if err := s.bindToolUse(ctx, t, ev.ToolUseID, ev.SessionID, ""); err != nil {
+				return err
+			}
+		}
+		if lease != "" && ev.SessionID != "" {
+			if err := s.noteLiveness(ctx, t, lease, ev.SessionID); err != nil {
 				return err
 			}
 		}
@@ -150,6 +188,11 @@ func (s *Service) wouldDeny(ctx context.Context, ev HookEvent, project, root, un
 	}
 	if target == "" {
 		return true, "no_target", lease, target
+	}
+	// Claude Code may expand a leading ~ to the home folder; joining it to the cwd would call it inside the workspace.
+	// (A relative file literally named ~something is denied too: the safe side of an ambiguity.)
+	if strings.HasPrefix(target, "~") {
+		return true, "outside_workspace", lease, target
 	}
 	if !filepath.IsAbs(target) {
 		target = filepath.Join(ev.Cwd, target)

@@ -6,5 +6,5 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [['list']],
   use: { baseURL: 'http://127.0.0.1:4173', trace: 'off' },
-  webServer: { command: 'VITE_ADAPTER=mock npx vite build --outDir .mock-dist && npx vite preview --outDir .mock-dist --host 127.0.0.1 --port 4173 --strictPort', url: 'http://127.0.0.1:4173', reuseExistingServer: true, timeout: 60_000 },
+  webServer: { command: 'VITE_ADAPTER=mock npx vite build --outDir .mock-dist && npx vite preview --outDir .mock-dist --host 127.0.0.1 --port 4173 --strictPort', url: 'http://127.0.0.1:4173', reuseExistingServer: false, timeout: 60_000 },
 });

@@ -164,6 +164,8 @@ type Project struct {
 	PendingApprovals  int        `json:"pending_approvals" required:"true"`
 	GuardPolicy       string     `json:"guard_policy" required:"true" enum:"off,audit,enforce"`
 	LastActivityAt    *time.Time `json:"last_activity_at,omitempty"`
+	// ForkOf is the id of the registered project this one is a fork of (a label the human sets).
+	ForkOf string `json:"fork_of,omitempty"`
 }
 
 type ProjectListRequest struct{ ListQuery }
@@ -174,8 +176,35 @@ type ProjectList struct {
 }
 
 type RegisterProjectRequest struct {
-	Path string `json:"path" required:"true"`
-	Name string `json:"name,omitempty"`
+	Path   string `json:"path" required:"true"`
+	Name   string `json:"name,omitempty"`
+	ForkOf string `json:"fork_of,omitempty"`
+}
+
+// SetProjectForkRequest sets or clears (empty fork_of) the fork label of a project.
+type SetProjectForkRequest struct {
+	ID     string `path:"id" required:"true"`
+	ForkOf string `json:"fork_of" required:"true"`
+}
+
+// GraphNodePos is where the human put a node, in canvas units.
+type GraphNodePos struct {
+	X float64 `json:"x" required:"true"`
+	Y float64 `json:"y" required:"true"`
+}
+
+// GraphLine is the side of its node where a line starts and ends, and how far along that side (0 to 1; absent: the default point).
+type GraphLine struct {
+	From string   `json:"from" required:"true" enum:"top,right,bottom,left"`
+	To   string   `json:"to" required:"true" enum:"top,right,bottom,left"`
+	Fo   *float64 `json:"fo,omitempty"`
+	Tt   *float64 `json:"tt,omitempty"`
+}
+
+// GraphLayout is the arrangement of the Graph page, one for the whole instance.
+type GraphLayout struct {
+	Nodes map[string]GraphNodePos `json:"nodes" required:"true"`
+	Lines map[string]GraphLine    `json:"lines" required:"true"`
 }
 
 type TaskSummary struct {
@@ -456,6 +485,8 @@ type ExecutionSummary struct {
 	StateDetail string     `json:"state_detail,omitempty"`
 	StartedAt   *time.Time `json:"started_at,omitempty"`
 	DurationS   *int       `json:"duration_s,omitempty"`
+	// WaitingSince is set while the harness waits for the human (its turn ended). The state stays running.
+	WaitingSince *time.Time `json:"waiting_since,omitempty"`
 }
 
 type ExecutionListRequest struct {
@@ -572,8 +603,11 @@ type HarnessList struct {
 }
 
 type GuardInfo struct {
-	Policy            string `json:"policy" required:"true" enum:"off,audit,enforce"`
-	Installed         bool   `json:"installed" required:"true"`
+	Policy    string `json:"policy" required:"true" enum:"off,audit,enforce"`
+	Installed bool   `json:"installed" required:"true"`
+	// WaitingHooks is true when the Stop, UserPromptSubmit and SessionEnd hooks that tell Waves a harness waits are on disk.
+	// False for a project connected before they existed (connect again) or not connected at all.
+	WaitingHooks      bool   `json:"waiting_hooks" required:"true"`
 	Drift             string `json:"drift,omitempty"` // set when a recorded connection no longer matches the hook on disk
 	WouldDeny24h      int    `json:"would_deny_24h" required:"true"`
 	NotDefended       string `json:"not_defended" required:"true"`
@@ -638,6 +672,7 @@ type Settings struct {
 	LogRetentionDays   int        `json:"log_retention_days" required:"true"`
 	LogMaxMB           int        `json:"log_max_mb" required:"true"`
 	SessionTTLHours    int        `json:"session_ttl_h" required:"true"`
+	WaitingMaxH        int        `json:"waiting_max_h" required:"true"`
 	LastBackupAt       *time.Time `json:"last_backup_at,omitempty"`
 	LastBackupBytes    int        `json:"last_backup_bytes,omitempty"`
 }
@@ -648,6 +683,7 @@ type PatchSettingsRequest struct {
 	MaxConcurrent      *int   `json:"max_concurrent,omitempty"`
 	HeartbeatS         *int   `json:"heartbeat_interval_s,omitempty"`
 	LogRetentionDays   *int   `json:"log_retention_days,omitempty"`
+	WaitingMaxH        *int   `json:"waiting_max_h,omitempty"`
 }
 
 type BackupResult struct {

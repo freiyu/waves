@@ -143,6 +143,10 @@ func (s *Server) patchProjectSettings(w http.ResponseWriter, r *http.Request, p 
 	if err := decode(r, &req); err != nil {
 		return err
 	}
+	// Each part asks for its own elevation, and a one-shot elevation covers one: a mixed request could apply half of itself.
+	if (req.GuardPolicy != "" || req.UnmanagedSessions != "") && (req.PromptTemplate != nil || req.BaseBranch != nil || req.ContextBudget != nil) {
+		return &core.Error{Status: http.StatusUnprocessableEntity, Code: "validation_failed", Message: "The guard settings and the other project settings cannot change in one request.", NextStep: "Send them as two requests."}
+	}
 	if req.GuardPolicy != "" || req.UnmanagedSessions != "" {
 		if err := s.core.SetProjectGuard(r.Context(), p, r.Header.Get(headerElev), r.PathValue("id"), req.GuardPolicy, req.UnmanagedSessions); err != nil {
 			return err
@@ -196,6 +200,20 @@ func (s *Server) guardDecide(w http.ResponseWriter, r *http.Request, p core.Prin
 		return err
 	}
 	return writeJSON(w, 200, d)
+}
+
+// guardSignal takes the Stop and UserPromptSubmit hook signals. Guard token only; the answer never says whether the
+// session holds a lease.
+func (s *Server) guardSignal(w http.ResponseWriter, r *http.Request, p core.Principal) error {
+	var sig core.HookSignal
+	if err := decode(r, &sig); err != nil {
+		return err
+	}
+	if err := s.core.SignalGuard(r.Context(), p, sig); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
 func (s *Server) tasksRoute(w http.ResponseWriter, r *http.Request, p core.Principal) error {

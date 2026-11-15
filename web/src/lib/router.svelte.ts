@@ -4,6 +4,7 @@ export interface RouteDef { name: string; path: string }
 
 export const ROUTES: RouteDef[] = [
   { name: 'overview', path: '/' },
+  { name: 'graph', path: '/graph' },
   { name: 'signin', path: '/signin/:code' },
   { name: 'signed-out', path: '/signed-out' },
   { name: 'welcome', path: '/welcome' },
@@ -11,6 +12,8 @@ export const ROUTES: RouteDef[] = [
   { name: 'project', path: '/projects/:id' },
   { name: 'requirements', path: '/projects/:id/requirements' },
   { name: 'plan', path: '/projects/:id/plan' },
+  { name: 'review', path: '/projects/:id/review' },
+  { name: 'guard', path: '/projects/:id/guard' },
   { name: 'workflow', path: '/projects/:id/workflow' },
   { name: 'workflow-version', path: '/workflow/:vid' },
   { name: 'phase-review', path: '/phases/:id/review' },
@@ -47,8 +50,10 @@ export const route = $state<{ name: string; params: Record<string, string> }>(ma
 if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', () => {
     const m = match(location.hash);
-    route.name = m.name;
-    route.params = m.params;
+    // Only a real change is written: resources that read route.params must not reload when the address changed but their own parameter did not
+    // (moving between the panes of one project keeps the same id).
+    if (route.name !== m.name) route.name = m.name;
+    if (JSON.stringify(route.params) !== JSON.stringify(m.params)) route.params = m.params;
     document.getElementById('main')?.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   });

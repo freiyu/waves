@@ -14,14 +14,14 @@
 
   const a = app();
   const res = resource(() => a.api.settings());
-  type Key = 'heartbeat_interval_s' | 'log_retention_days' | 'elevation_window_min' | 'max_concurrent';
+  type Key = 'heartbeat_interval_s' | 'log_retention_days' | 'elevation_window_min' | 'max_concurrent' | 'waiting_max_h';
   let draft = $state<Partial<Record<Key, number>>>({});
   let error = $state('');
-  let locked = $state<null | { key: 'elevation_window_min' | 'max_concurrent'; label: string; value: number }>(null);
+  let locked = $state<null | { key: 'elevation_window_min' | 'max_concurrent' | 'waiting_max_h'; label: string; value: number }>(null);
 
   const val = (s: Settings, k: Key) => draft[k] ?? s[k];
 
-  const NAME: Record<Key, string> = { heartbeat_interval_s: 'Heartbeat interval', log_retention_days: 'Log retention', elevation_window_min: 'Elevation window', max_concurrent: 'Concurrent executions' };
+  const NAME: Record<Key, string> = { heartbeat_interval_s: 'Heartbeat interval', log_retention_days: 'Log retention', elevation_window_min: 'Elevation window', max_concurrent: 'Concurrent executions', waiting_max_h: 'Longest wait' };
   async function save(k: Key) {
     error = '';
     try {
@@ -54,7 +54,7 @@
   <Btn sm disabled={draft[k] === undefined || draft[k] === s[k]} onclick={() => save(k)}>Save</Btn>
 {/snippet}
 
-<PageHead title="Settings" sub="Locked items need your approval passphrase. They are never changed from an operator session." />
+<PageHead title="Settings" />
 <View {res} label="settings">
   {#snippet children(s)}
     {#if error}<Note kind="dng" icon="fail" role="alert">{error}</Note>{/if}
@@ -70,6 +70,9 @@
         <span class="value">{s.max_concurrent}</span>
         <Btn sm lock onclick={() => (locked = { key: 'max_concurrent', label: `Concurrent executions (1 to ${s.hard_cap})`, value: s.max_concurrent })}>Edit with passphrase</Btn></div>
       <div class="list-row"><div class="lbl-col"><b>Heartbeat interval</b><div class="small muted">Agents report every {s.heartbeat_interval_s} s. Missed beats move an execution to Disconnected.</div></div>{@render number(s, 'heartbeat_interval_s', 'Heartbeat interval', 's')}</div>
+      <div class="list-row"><div class="lbl-col"><b>Longest wait for instruction</b><div class="small muted">A harness may wait up to {s.waiting_max_h} h for your answer. After that its lease ends and the task needs your decision.</div></div>
+        <span class="value">{s.waiting_max_h}</span>
+        <Btn sm lock onclick={() => (locked = { key: 'waiting_max_h', label: 'Longest wait (1 to 72 hours)', value: s.waiting_max_h })}>Edit with passphrase</Btn></div>
     </Panel>
     <Panel title="Data">
       <div class="list-row"><div class="lbl-col"><b>Log retention</b><div class="small muted">Execution logs are kept {s.log_retention_days} days, {s.log_max_mb} MB each. Audit records are kept.</div></div>{@render number(s, 'log_retention_days', 'Log retention', 'days')}</div>

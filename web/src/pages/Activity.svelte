@@ -37,7 +37,7 @@
   ];
 </script>
 
-<PageHead title="Activity" sub="Every change is recorded. Records form a hash chain checked at startup and before each approval." />
+<PageHead title="Activity" />
 <View {res} label="activity">
   {#snippet children(d)}
     {#if d.status.state === 'verified'}

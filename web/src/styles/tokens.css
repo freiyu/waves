@@ -1,39 +1,61 @@
-/* Tokens: light by default, dark by system preference, manual override through data-theme. */
+/* Tokens: light (warm Lotus) by default, dark (Kanagawa) by system preference, manual override through data-theme.
+   Components use these names only. Motion tokens at the bottom are theme independent. */
 :root {
-  --bg: #F5F6F8; --surface: #FFFFFF; --surface-muted: #EEF0F3; --border: #D8DCE3; --border-strong: #8A93A2;
-  --text: #11151B; --text-muted: #566170; --primary: #1F5FD1; --primary-text: #FFFFFF; --focus: #1F5FD1;
-  --status-active: #1F4FB8; --status-active-soft: #E3EBFB;
-  --status-attention: #6B3FC4; --status-attention-soft: #EEE7FB;
-  --status-ok: #1B6E3C; --status-ok-soft: #E1F4E8;
-  --status-danger: #B42318; --status-danger-soft: #FDE7E4;
-  --status-warning: #8A5300; --status-warning-soft: #FBEFD5;
-  --status-neutral: #4A5361; --status-neutral-soft: #ECEEF1;
-  --overlay: rgba(0, 0, 0, 0.45);
+  --bg: #F3EEE3; --surface: #FBF8F1; --surface-muted: #E9E3D4; --border: #D8D0BC; --border-strong: #8C8574;
+  --text: #2B2D3A; --text-muted: #5C5A57; --primary: #3F5F96; --primary-text: #FBF8F1; --focus: #3F5F96;
+  --canvas: #EFE9DB; --canvas-dot: #C9C0A8;
+  --status-active: #35568C; --status-active-soft: #DDE6F0;
+  --status-attention: #68508C; --status-attention-soft: #E8E1EE;
+  --status-ok: #496736; --status-ok-soft: #E1E9D6;
+  --status-danger: #A33544; --status-danger-soft: #F3DCDA;
+  --status-warning: #80590D; --status-warning-soft: #F4E6C2;
+  --status-neutral: #5C5A57; --status-neutral-soft: #E7E2D6;
+  --status-waiting: #316762; --status-waiting-soft: #D9E8E3;
+  --accent: #964D00; --accent-soft: #F6E1C4;
+  --scrim: rgba(43, 45, 58, 0.4);
+  --overlay: var(--scrim);
   /* Command blocks are near-black in both themes. */
-  --code-bg: #0A0B0D; --code-text: #E8EAEE; --code-border: #2A2D33;
+  --code-bg: #16161D; --code-text: #DCD7BA; --code-border: #363646;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0A0B0D; --surface: #131417; --surface-muted: #1B1D21; --border: #2A2D33; --border-strong: #6B7280;
-    --text: #E8EAEE; --text-muted: #A0A7B3; --primary: #6EA8FF; --primary-text: #0A0B0D; --focus: #6EA8FF;
-    --status-active: #8DB4FF; --status-active-soft: #14284F;
-    --status-attention: #C4A8FF; --status-attention-soft: #2A1D4D;
-    --status-ok: #6FD59A; --status-ok-soft: #11331F;
-    --status-danger: #FF8F85; --status-danger-soft: #3F1511;
-    --status-warning: #F0B35A; --status-warning-soft: #3A2A0C;
-    --status-neutral: #B0B7C3; --status-neutral-soft: #24272D;
+    --bg: #16161D; --surface: #1F1F28; --surface-muted: #2A2A37; --border: #363646; --border-strong: #6A6A82;
+    --text: #DCD7BA; --text-muted: #A09D8E; --primary: #7E9CD8; --primary-text: #16161D; --focus: #7E9CD8;
+    --canvas: #1A1A22; --canvas-dot: #363646;
+    --status-active: #8FB0E6; --status-active-soft: #223249;
+    --status-attention: #B6A2D4; --status-attention-soft: #2E2840;
+    --status-ok: #98BB6C; --status-ok-soft: #25301F;
+    --status-danger: #E8808C; --status-danger-soft: #3A2024;
+    --status-warning: #E6C384; --status-warning-soft: #352C1A;
+    --status-neutral: #A09D8E; --status-neutral-soft: #2A2A37;
+    --status-waiting: #7FC1B4; --status-waiting-soft: #1D3430;
+    --accent: #FFA066; --accent-soft: #3A2616;
+    --scrim: rgba(8, 8, 12, 0.6);
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --bg: #0A0B0D; --surface: #131417; --surface-muted: #1B1D21; --border: #2A2D33; --border-strong: #6B7280;
-  --text: #E8EAEE; --text-muted: #A0A7B3; --primary: #6EA8FF; --primary-text: #0A0B0D; --focus: #6EA8FF;
-  --status-active: #8DB4FF; --status-active-soft: #14284F;
-  --status-attention: #C4A8FF; --status-attention-soft: #2A1D4D;
-  --status-ok: #6FD59A; --status-ok-soft: #11331F;
-  --status-danger: #FF8F85; --status-danger-soft: #3F1511;
-  --status-warning: #F0B35A; --status-warning-soft: #3A2A0C;
-  --status-neutral: #B0B7C3; --status-neutral-soft: #24272D;
+  --bg: #16161D; --surface: #1F1F28; --surface-muted: #2A2A37; --border: #363646; --border-strong: #6A6A82;
+  --text: #DCD7BA; --text-muted: #A09D8E; --primary: #7E9CD8; --primary-text: #16161D; --focus: #7E9CD8;
+  --canvas: #1A1A22; --canvas-dot: #363646;
+  --status-active: #8FB0E6; --status-active-soft: #223249;
+  --status-attention: #B6A2D4; --status-attention-soft: #2E2840;
+  --status-ok: #98BB6C; --status-ok-soft: #25301F;
+  --status-danger: #E8808C; --status-danger-soft: #3A2024;
+  --status-warning: #E6C384; --status-warning-soft: #352C1A;
+  --status-neutral: #A09D8E; --status-neutral-soft: #2A2A37;
+  --status-waiting: #7FC1B4; --status-waiting-soft: #1D3430;
+  --accent: #FFA066; --accent-soft: #3A2616;
+  --scrim: rgba(8, 8, 12, 0.6);
   color-scheme: dark;
+}
+
+/* Motion tokens. Entrances ease-out, moves ease-in-out, no bounce; an exit is 20% shorter than its entrance. */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms; --dur-base: 200ms; --dur-slow: 250ms;
+  --dur-fast-out: 120ms; --dur-base-out: 160ms; --dur-slow-out: 200ms;
+  --stagger: 30ms;
 }

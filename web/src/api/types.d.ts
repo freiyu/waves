@@ -1064,6 +1064,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/graph-layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The saved arrangement of the Graph page
+         * @description Scope: op
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ContractGraphLayout"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ContractErrorBody"];
+                    };
+                };
+            };
+        };
+        /**
+         * Save the arrangement of the Graph page
+         * @description Scope: op
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["ContractGraphLayout"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ContractErrorBody"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/harnesses": {
         parameters: {
             query?: never;
@@ -1455,7 +1537,45 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Set or clear the fork label of a project
+         * @description Scope: op
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["ContractSetProjectForkRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ContractProject"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ContractErrorBody"];
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/projects/{id}/activate": {
@@ -2567,6 +2687,8 @@ export interface components {
             task_id: string;
             task_title: string;
             usage?: components["schemas"]["ContractUsage"];
+            /** Format: date-time */
+            waiting_since?: null | string;
             workspace_locked: boolean;
             workspace_path: string;
         };
@@ -2596,12 +2718,36 @@ export interface components {
             task_code: string;
             task_id: string;
             task_title: string;
+            /** Format: date-time */
+            waiting_since?: null | string;
         };
         ContractFinding: {
             detail: string;
             /** @enum {string} */
             kind: "unattributed" | "out_of_scope";
             path: string;
+        };
+        ContractGraphLayout: {
+            lines: {
+                [key: string]: components["schemas"]["ContractGraphLine"];
+            } | null;
+            nodes: {
+                [key: string]: components["schemas"]["ContractGraphNodePos"];
+            } | null;
+        };
+        ContractGraphLine: {
+            fo?: null | number;
+            /** @enum {string} */
+            from: "top" | "right" | "bottom" | "left";
+            /** @enum {string} */
+            to: "top" | "right" | "bottom" | "left";
+            tt?: null | number;
+        };
+        ContractGraphNodePos: {
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
         };
         ContractGuardDecision: {
             /** Format: date-time */
@@ -2625,6 +2771,7 @@ export interface components {
             policy: "off" | "audit" | "enforce";
             /** @enum {string} */
             unmanaged_sessions: "allow" | "deny";
+            waiting_hooks: boolean;
             would_deny_24h: number;
         };
         ContractHarness: {
@@ -2683,6 +2830,7 @@ export interface components {
             heartbeat_interval_s?: null | number;
             log_retention_days?: null | number;
             max_concurrent?: null | number;
+            waiting_max_h?: null | number;
         };
         ContractPhaseRef: {
             code: string;
@@ -2724,6 +2872,7 @@ export interface components {
             base_branch?: string;
             branch?: string;
             failed_executions: number;
+            fork_of?: string;
             /** @enum {string} */
             guard_policy: "off" | "audit" | "enforce";
             id: string;
@@ -2742,6 +2891,7 @@ export interface components {
             base_branch?: string;
             branch?: string;
             failed_executions: number;
+            fork_of?: string;
             /** @enum {string} */
             guard_policy: "off" | "audit" | "enforce";
             harness?: components["schemas"]["ContractHarnessBrief"];
@@ -2793,6 +2943,7 @@ export interface components {
             timeline: components["schemas"]["ContractStateChange"][];
         };
         ContractRegisterProjectRequest: {
+            fork_of?: string;
             name?: string;
             path: string;
         };
@@ -2846,6 +2997,9 @@ export interface components {
             /** @enum {string} */
             scope: "operator" | "human";
         };
+        ContractSetProjectForkRequest: {
+            fork_of: string;
+        };
         ContractSettings: {
             elevation_window_min: number;
             hard_cap: number;
@@ -2860,6 +3014,7 @@ export interface components {
             max_concurrent: number;
             passphrase_set: boolean;
             session_ttl_h: number;
+            waiting_max_h: number;
         };
         ContractStateChange: {
             /** Format: date-time */

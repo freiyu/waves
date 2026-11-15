@@ -5,12 +5,10 @@
   import SignIn from './pages/SignIn.svelte';
   import Overview from './pages/Overview.svelte';
   import Projects from './pages/Projects.svelte';
-  import Project from './pages/Project.svelte';
-  import Requirements from './pages/Requirements.svelte';
-  import Plan from './pages/Plan.svelte';
-  import Workflow from './pages/Workflow.svelte';
-  import PhaseReview from './pages/PhaseReview.svelte';
-  import Approvals from './pages/Approvals.svelte';
+  import ProjectArea from './pages/ProjectArea.svelte';
+  import PhaseRedirect from './pages/PhaseRedirect.svelte';
+  import Graph from './pages/Graph.svelte';
+  import Redirect from './lib/Redirect.svelte';
   import Executions from './pages/Executions.svelte';
   import Execution from './pages/Execution.svelte';
   import Recovery from './pages/Recovery.svelte';
@@ -25,12 +23,14 @@
 
   const a = app();
   const PAGES: Record<string, Component> = {
-    overview: Overview, projects: Projects, project: Project, requirements: Requirements, plan: Plan, workflow: Workflow, 'workflow-version': Workflow,
-    'phase-review': PhaseReview, approvals: Approvals, approval: Approvals, executions: Executions, execution: Execution, recovery: Recovery,
+    overview: Overview, graph: Graph, projects: Projects, project: ProjectArea, requirements: ProjectArea, plan: ProjectArea, review: ProjectArea, guard: ProjectArea,
+    'phase-review': PhaseRedirect, executions: Executions, execution: Execution, recovery: Recovery,
     harnesses: Harnesses, connect: Connect, activity: Activity, settings: Settings,
   };
   const bare = $derived(a.state.signedOut || route.name === 'signin' || route.name === 'welcome' || route.name === 'signed-out');
   const Page = $derived(PAGES[route.name] ?? NotFound);
+  // Addresses without a page of their own: the approval inbox and the workflow page are gone (decisions live in Projects and the Graph, the workflow is in the Plan pane).
+  const moved = $derived(['approvals', 'approval', 'workflow-version'].includes(route.name) ? '/' : route.name === 'workflow' ? `/projects/${route.params.id}/plan` : '');
 </script>
 
 {#if !a.state.loaded}
@@ -38,7 +38,7 @@
 {:else if bare}
   <SignIn />
 {:else}
-  <Shell><Page /></Shell>
+  <Shell>{#if moved}<Redirect to={moved} />{:else}<Page />{/if}</Shell>
 {/if}
 
 <Toaster position="bottom-right" duration={4000} theme={theme.value} />

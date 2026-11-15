@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { visible, hasHidden } from './text';
   // Approve and reject controls for one approval. The decision itself is made by
   // the service; this component only gathers the input and the passphrase.
   import { app } from './app.svelte';
@@ -8,13 +9,15 @@
   import Btn from './Btn.svelte';
   import StepUpDialog from './StepUpDialog.svelte';
 
-  interface Props { approval: ApprovalDetail; overrideRequired?: boolean; ondecided: (a: ApprovalDetail) => void }
-  let { approval, overrideRequired = false, ondecided }: Props = $props();
+  // `start` opens the confirmation straight away (an icon action in a table or on the Graph); `oncancel` then closes the flow.
+  interface Props { approval: ApprovalDetail; overrideRequired?: boolean; ondecided: (a: ApprovalDetail) => void; start?: 'approve' | 'reject'; oncancel?: () => void }
+  let { approval, overrideRequired = false, ondecided, start, oncancel }: Props = $props();
   const a = app();
   const sd = shellData();
   const blocked = $derived(sd.status.data?.audit.state === 'broken');
 
-  let mode = $state<null | 'approve' | 'reject'>(null);
+  // svelte-ignore state_referenced_locally
+  let mode = $state<null | 'approve' | 'reject'>(start ?? null);
   let override = $state('');
   let feedback = $state('');
 
@@ -26,7 +29,7 @@
     { label: 'Action', value: approval.action },
     { label: 'Project', value: approval.project_name },
     { label: 'Subject', value: approval.subject },
-    ...approval.facts.filter((f) => f.label === 'Phase'),
+    ...approval.facts, // everything the approval carries, including what the agent wrote: the human decides on the whole of it
     { label: 'Requested by', value: approval.requested_by },
     { label: 'Impact', value: approval.impact },
     ...(overrideRequired && mode === 'approve' ? [{ label: 'Override reason', value: override.trim() }] : []),
@@ -61,7 +64,7 @@
   }
 </script>
 
-{#if approval.state === 'pending'}
+{#if approval.state === 'pending' && !start}
   <div class="stack">
     {#if overrideRequired}
       <div>
@@ -90,17 +93,21 @@
     danger={mode === 'reject'}
     needPassphrase={needPass}
     nopass={covered ? undefined : 'No passphrase is needed to reject this item.'}
-    incomplete={mode === 'reject' && !feedback.trim()}
+    incomplete={(mode === 'reject' && !feedback.trim()) || (mode === 'approve' && overrideRequired && !override.trim())}
     onconfirm={confirm}
-    oncancel={() => (mode = null)}
+    oncancel={() => { mode = null; oncancel?.(); }}
   >
     {#snippet extra()}
+      {#if start && mode === 'approve' && overrideRequired}
+        <div><label class="lbl" for="override-q">Override reason (required: a validator failed)</label><textarea id="override-q" class="field" bind:value={override}></textarea></div>
+      {/if}
       {#if mode === 'reject'}
         <div><label class="lbl" for="feedback">Feedback (required)</label><textarea id="feedback" class="field" bind:value={feedback}></textarea></div>
       {/if}
       {#if approval.commands.length}
         <div class="small muted">Commands this approval fixes:</div>
-        <pre class="cli">{approval.commands.join('\n')}</pre>
+        <pre class="cli">{visible(approval.commands.join('\n'))}</pre>
+        {#if hasHidden(approval.commands.join('\n'))}<div class="muted">Hidden characters are shown as \u{'{'}code{'}'}. They were not typed by you; check the command before you approve.</div>{/if}
       {/if}
     {/snippet}
   </StepUpDialog>
