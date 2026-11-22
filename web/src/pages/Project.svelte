@@ -122,7 +122,7 @@
               <li class="li" use:flashOnChange={JSON.stringify(r)}>
                 <div class="t"><b>{r.code} {r.title}</b><span class="muted small">{r.depends_on.length ? 'after: ' + r.depends_on.join(', ') : 'no dependencies'}{#if r.execution_id} · <a class="mono" href={href('/executions/' + r.execution_id)}>{r.execution_id}</a>{/if}</span></div>
                 {#if r.mode === 'read_only'}<span class="tag">read only</span>{/if}
-                <Badge state={r.state} text={r.state_detail ?? undefined} />
+                <Badge state={r.state} />
                 <RowMenu label="Actions for {r.code}" items={[...(r.execution_id ? [{ label: 'Open execution', icon: 'exec' as const, run: () => go('/executions/' + r.execution_id) }] : []), { label: 'Copy task id', icon: 'copy' as const, run: () => copyText(r.id) }]} />
               </li>
             {:else}

@@ -389,6 +389,9 @@ func (s *Service) Connect(ctx context.Context, p Principal, elevation, projectID
 		if _, err := t.ExecContext(ctx, `UPDATE credentials SET revoked_at = ? WHERE project_id = ? AND revoked_at IS NULL`, s.ts(), projectID); err != nil {
 			return wrap(err, "revoke old credential")
 		}
+		if err := s.endPresence(ctx, t, projectID); err != nil {
+			return err
+		}
 		if _, err := t.ExecContext(ctx, `INSERT INTO credentials(id, scope, project_id, token_hash, created_at) VALUES (?, 'mcp_project', ?, ?, ?)`, NewID("crd"), projectID, HashSecret(tok), s.ts()); err != nil {
 			return wrap(err, "create project credential")
 		}
@@ -463,6 +466,9 @@ func (s *Service) Disconnect(ctx context.Context, p Principal, elevation, projec
 		}
 		if _, err := t.ExecContext(ctx, `UPDATE credentials SET revoked_at = ? WHERE project_id = ? AND revoked_at IS NULL`, s.ts(), projectID); err != nil {
 			return wrap(err, "revoke credential")
+		}
+		if err := s.endPresence(ctx, t, projectID); err != nil {
+			return err
 		}
 		if _, err := t.ExecContext(ctx, `UPDATE project_settings SET guard_policy = 'off', updated_at = ? WHERE project_id = ?`, s.ts(), projectID); err != nil {
 			return wrap(err, "set policy")

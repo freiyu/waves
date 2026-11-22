@@ -4,6 +4,7 @@
   import { resource } from '../lib/resource.svelte';
   import { route, href, go } from '../lib/router.svelte';
   import { clock, plural } from '../lib/format';
+  import { label } from '../lib/status';
   import PageHead from '../lib/PageHead.svelte';
   import Panel from '../lib/Panel.svelte';
   import Note from '../lib/Note.svelte';
@@ -17,7 +18,7 @@
   type D = 'fail' | 'complete_partial' | 'retry_fresh';
   let ask = $state<D | 'orphans' | null>(null);
   const COPY: Record<D, { title: string; what: string; confirm: string; body: string; done: string; cmd?: string; danger?: boolean }> = {
-    complete_partial: { title: 'Accept partial result', what: 'Accept', confirm: 'Accept partial result', body: 'Marks the execution Completed (partial) and sends the task to review. You still decide the result.', done: 'Partial result accepted and the task sent to review' },
+    complete_partial: { title: 'Accept partial result', what: 'Accept', confirm: 'Accept partial result', body: 'Marks the execution Completed (partial) and the task Done. The phase review lists it with a note, and you decide it there.', done: 'Partial result accepted and the task marked Done' },
     retry_fresh: { title: 'Retry the task', what: 'Retry', confirm: 'Retry task', body: 'The task goes back to Ready for an agent to claim. Waves does not change the workspace: files the agent wrote stay as they are, and this diff stays for reference.', done: 'Task sent back to Ready' },
     fail: { title: 'Mark the execution failed', what: 'Mark failed', confirm: 'Mark failed', body: 'The execution is recorded as Failed and the diff stays available. The task stays Blocked: retry it later, or cancel it from a terminal with', cmd: 'waves task cancel <task id> "<reason>"', danger: true, done: 'Execution marked failed' },
   };
@@ -37,9 +38,9 @@
     {:else}
       {@const r = e.recovery}
       <PageHead title="Recovery · {e.task_code} needs your decision" sub="{e.id} · {e.project_name} · {e.task_title}" crumbs={[{ label: 'Executions', href: href('/executions') }, { label: e.id, href: href('/executions/' + e.id) }, { label: 'Recovery' }]}>
-        {#snippet above()}<Badge state="blocked" text="Blocked · recovery required" /><span class="mono muted">{e.id}</span>{/snippet}
+        {#snippet above()}<Badge state="blocked" /><span class="mono muted">{e.id}</span>{/snippet}
       </PageHead>
-      <Note kind="warn"><b>{r.reason}</b> The agent may already have changed files, so you decide what happens next.</Note>
+      <Note kind="warn">The agent may already have changed files, so you decide what happens next.</Note>
       <div class="cols">
         <div class="stack-lg">
           <Panel title="What was kept">
@@ -62,7 +63,7 @@
             {/each}
           </Panel>
         </div>
-        <Panel title="Timeline"><ul class="timeline">{#each [...r.timeline].reverse() as t}<li><span class="dot"></span><span class="t">{t.detail ?? t.state}</span><span class="mono muted small">{clock(t.at)}</span></li>{/each}</ul></Panel>
+        <Panel title="Timeline"><ul class="timeline">{#each [...r.timeline].reverse().filter((t, i, all) => i === 0 || t.state !== all[i - 1]!.state) as t}<li><span class="dot"></span><span class="t">{label(t.state)}</span><span class="mono muted small">{clock(t.at)}</span></li>{/each}</ul></Panel>
       </div>
       {#if ask === 'orphans'}
         <Confirm title="Stop the leftover process?" confirm="Stop it" danger oncancel={() => (ask = null)} onconfirm={async () => { await a.api.stopOrphans(e.id); ask = null; toast.success(`Stop signal sent to ${r.orphan?.command ?? 'the process'}`); await res.reload(); }}>

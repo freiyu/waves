@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -187,5 +188,73 @@ func TestInternalErrorCarriesARequestID(t *testing.T) {
 	r, _, _ := result(nil, errors.New("create validator: constraint failed"))
 	if !r.IsError || !strings.Contains(text(r), "(request req_") || strings.Contains(text(r), "constraint") {
 		t.Fatalf("internal error result: %s", text(r))
+	}
+}
+
+// The stream the bridge keeps open is how Waves knows a session is connected: it counts while the stream lives and stops
+// counting when the client goes away, and only the project's own credential can start it.
+func TestOpenStreamMeansConnected(t *testing.T) {
+	f := setup(t)
+	var pid string
+	f.db.R.QueryRow(`SELECT id FROM projects`).Scan(&pid)
+	cs, err := f.client(t, f.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	until := func(want bool, what string) {
+		t.Helper()
+		for i := 0; i < 60; i++ {
+			if f.core.SessionConnected(pid, cs.ID()) == want {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatalf("%s: connected is not %v", what, want)
+	}
+	until(true, "after the client connected")
+	cs.Close()
+	until(false, "after the client closed")
+
+	// A closed or invented session id with the right credential is refused by the SDK and must not count as a connection.
+	for _, sid := range []string{cs.ID(), "invented-session-id"} {
+		req, _ := http.NewRequest("GET", f.srv.URL+"/mcp", nil)
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("Mcp-Session-Id", sid)
+		req.Header.Set("Authorization", "Bearer "+f.token)
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		if res, err := http.DefaultClient.Do(req.WithContext(ctx)); err == nil {
+			if res.StatusCode != http.StatusNotFound {
+				t.Fatalf("a stream for session %q answered %d, want 404", sid, res.StatusCode)
+			}
+			res.Body.Close()
+		}
+		cancel()
+		if f.core.SessionConnected(pid, sid) {
+			t.Fatalf("a refused stream for %q counts as connected", sid)
+		}
+	}
+
+	// The same session id with another credential, or none, starts no stream.
+	cs2, err := f.client(t, f.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs2.Close()
+	for _, auth := range []string{"", "Bearer wrong-token"} {
+		req, _ := http.NewRequest("GET", f.srv.URL+"/mcp", nil)
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("Mcp-Session-Id", cs2.ID())
+		if auth != "" {
+			req.Header.Set("Authorization", auth)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		res, err := http.DefaultClient.Do(req.WithContext(ctx))
+		if err == nil {
+			if res.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("a stream with %q answered %d", auth, res.StatusCode)
+			}
+			res.Body.Close()
+		}
+		cancel()
 	}
 }

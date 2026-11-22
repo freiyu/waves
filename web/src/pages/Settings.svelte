@@ -69,8 +69,8 @@
       <div class="list-row"><div class="lbl-col"><b>Concurrent executions</b><div class="small muted">Global limit {s.max_concurrent} of hard cap {s.hard_cap}. One code-changing execution per workspace.</div></div>
         <span class="value">{s.max_concurrent}</span>
         <Btn sm lock onclick={() => (locked = { key: 'max_concurrent', label: `Concurrent executions (1 to ${s.hard_cap})`, value: s.max_concurrent })}>Edit with passphrase</Btn></div>
-      <div class="list-row"><div class="lbl-col"><b>Heartbeat interval</b><div class="small muted">Agents report every {s.heartbeat_interval_s} s. Missed beats move an execution to Disconnected.</div></div>{@render number(s, 'heartbeat_interval_s', 'Heartbeat interval', 's')}</div>
-      <div class="list-row"><div class="lbl-col"><b>Longest wait for instruction</b><div class="small muted">A harness may wait up to {s.waiting_max_h} h for your answer. After that its lease ends and the task needs your decision.</div></div>
+      <div class="list-row"><div class="lbl-col"><b>Heartbeat interval</b><div class="small muted">Only for an agent session that holds no connection to Waves: it reports every {s.heartbeat_interval_s} s, and missed beats move its execution to Disconnected. A connected session keeps its lease without it.</div></div>{@render number(s, 'heartbeat_interval_s', 'Heartbeat interval', 's')}</div>
+      <div class="list-row"><div class="lbl-col"><b>Longest wait for instruction</b><div class="small muted">A harness without a connection to Waves may wait up to {s.waiting_max_h} h for your answer. After that its lease ends and the task needs your decision. A connected session waits without a limit.</div></div>
         <span class="value">{s.waiting_max_h}</span>
         <Btn sm lock onclick={() => (locked = { key: 'waiting_max_h', label: 'Longest wait (1 to 72 hours)', value: s.waiting_max_h })}>Edit with passphrase</Btn></div>
     </Panel>

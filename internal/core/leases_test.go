@@ -393,12 +393,9 @@ func TestResultReviewAndValidation(t *testing.T) {
 	if err := a.s.SubmitResult(a.ctx, a.agent, "s1", r.LeaseToken, "added handler", "completed", nil); err != nil {
 		t.Fatal(err)
 	}
-	if a.state(t, "tasks", t1) != "In Review" {
-		t.Fatalf("t1 is %s", a.state(t, "tasks", t1))
-	}
-	res := a.pendingApproval(t, "result", t1)
-	if err := a.decide(t, a.p, res, "approve", false); err != nil {
-		t.Fatalf("result approval: %v", err)
+	// No approval per task: a finished task is Done at once and the next one is Ready. The human decides at the end of the phase.
+	if a.pending("result", t1) {
+		t.Fatal("a result approval was requested for a single task")
 	}
 	if a.state(t, "tasks", t1) != "Done" || a.state(t, "tasks", t2) != "Ready" {
 		t.Fatalf("after result: %s %s", a.state(t, "tasks", t1), a.state(t, "tasks", t2))
@@ -597,9 +594,6 @@ func TestRestartDoesNotRunValidators(t *testing.T) {
 	for _, k := range []string{"p1-t1", "p1-t2"} {
 		r, _ := a.s.ClaimTask(a.ctx, a.agent, "s1", a.task(t, k), "")
 		a.s.SubmitResult(a.ctx, a.agent, "s1", r.LeaseToken, "x", "completed", nil)
-		if k == "p1-t1" {
-			a.decide(t, a.p, a.pendingApproval(t, "result", a.task(t, k)), "approve", false)
-		}
 	}
 	if a.state(t, "phases", a.phase1) != "Validation" {
 		t.Fatalf("phase is %s", a.state(t, "phases", a.phase1))
@@ -658,17 +652,13 @@ func TestDanglingSymlinkIsRefused(t *testing.T) {
 	}
 }
 
-// A rejected result sends the task back with the human's feedback, and the
-// next claim's context package carries it (found in the real Claude Code run:
-// without it the agent resubmitted the same work).
-func TestRejectedResultFeedbackReachesTheAgent(t *testing.T) {
+// A result approval that a 1.0.1 database still holds is decided as before: rejecting it sends the task back with the human's
+// feedback, and the next claim's context package carries it. New results no longer create one (see the test above).
+func TestRejectedLegacyResultFeedbackReachesTheAgent(t *testing.T) {
 	a := startedFlow(t)
 	t1 := a.task(t, "p1-t1")
 	r, _ := a.s.ClaimTask(a.ctx, a.agent, "s1", t1, "")
-	os.WriteFile(filepath.Join(a.root, "health.go"), []byte("package main\n"), 0o600)
-	if err := a.s.SubmitResult(a.ctx, a.agent, "s1", r.LeaseToken, "added handler", "completed", nil); err != nil {
-		t.Fatal(err)
-	}
+	a.legacyResult(t, r.ExecutionID, t1)
 	if err := a.decide(t, a.p, a.pendingApproval(t, "result", t1), "reject", false); err != nil {
 		t.Fatal(err)
 	}

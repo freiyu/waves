@@ -86,7 +86,7 @@
         <Panel title="Status">
           <div class="pb"><dl class="kv grid-cols-[110px_minmax(0,1fr)]">
             <dt>State</dt><dd><Badge state={e.state} /></dd>
-            {#if e.lease}<dt>Lease</dt><dd><span class="mono">{e.lease.id}</span> · expires {clock(e.lease.expires_at)}</dd><dt>Heartbeat</dt><dd>every {e.lease.heartbeat_interval_s} s</dd>{/if}
+            {#if e.lease}<dt>Lease</dt><dd><span class="mono">{e.lease.id}</span> · {#if e.lease.connected}held while the session is connected{:else}ends {clock(e.lease.expires_at ?? '')} unless the session reconnects{/if}</dd>{#if !e.lease.connected}<dt>Heartbeat</dt><dd>every {e.lease.heartbeat_interval_s} s</dd>{/if}{/if}
             <dt>Workspace</dt><dd><span class="mono">{e.workspace_path}</span> {e.workspace_locked ? 'locked' : 'free'}</dd>
             {#if e.start_commit}<dt>Start commit</dt><dd class="mono">{e.start_commit}</dd>{/if}
           </dl></div>

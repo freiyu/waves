@@ -14,13 +14,13 @@ import (
 	"waves/internal/store"
 )
 
-const contextTemplate = "v1"
+const contextTemplate = "v2"
 
-const leaseRules = `Work only on this task, inside the project folder. Heartbeat at the given interval.
-Use waves_request_approval before a risky action (deleting data, changing CI, touching secrets) and wait for the decision.
-If a heartbeat shows cancel_requested, stop and call waves_release_task. If your risky action is rejected, do not do it; release the task or report a blocker.
+const leaseRules = `Work only on this task, inside the project folder. Your lease lasts while this session stays connected: no heartbeat is needed. Report waves_report_progress while you work.
+Use waves_request_approval before a risky action (deleting data, changing CI, touching secrets), then call waves_heartbeat to read the decision and wait for it.
+If waves_heartbeat shows cancel_requested, or any call says your lease is not valid, stop and call waves_release_task if you can. If your risky action is rejected, do not do it; release the task or report a blocker.
 A read_only task must not write files. Writes to .git, the Claude settings and .mcp.json are refused.
-Finish with waves_submit_result, or give the task back with waves_release_task. You cannot approve anything; a human does.`
+Finish with waves_submit_result: the task is then Done and the next one can start; the human reviews the results of the whole phase at its end. Or give the task back with waves_release_task. You cannot approve anything; a human does.`
 
 // TaskContext builds, stores and returns the context package of a leased
 // task. The exact delivered text is kept for audit (GET /executions/{id}/context).
@@ -91,7 +91,7 @@ func (s *Service) TaskContext(ctx context.Context, p Principal, mcpSession, toke
 		}
 		rows.Close()
 		if len(deps) > 0 {
-			sections = append(sections, contract.ContextSection{Title: "Finished dependencies", Content: bullets(deps)})
+			sections = append(sections, contract.ContextSection{Title: "Finished dependencies (agent reports, not reviewed by a human)", Content: bullets(deps)})
 		}
 	}
 	budget := 0

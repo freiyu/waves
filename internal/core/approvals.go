@@ -44,6 +44,16 @@ func (s *Service) subjectHash(ctx context.Context, q store.Execer, category, sub
 			return "", wrap(err, "read version")
 		}
 		h.Write([]byte(ch))
+		if category == "workflow" {
+			// What approving it cancels is part of what the human decides on.
+			items, err := s.openWork(ctx, q, subjectID)
+			if err != nil {
+				return "", err
+			}
+			for _, w := range items {
+				h.Write([]byte(w.task + w.state + w.exe))
+			}
+		}
 	case "phase":
 		var ch, state string
 		if err := q.QueryRowContext(ctx, `SELECT v.content_hash, p.state FROM phases p JOIN workflow_versions v ON v.id = p.workflow_version_id WHERE p.id = ?`, subjectID).Scan(&ch, &state); err != nil {
@@ -186,17 +196,14 @@ func (s *Service) applyDecision(ctx context.Context, t *Tx, cat, stype, sid, pro
 		}
 		var wf string
 		t.QueryRowContext(ctx, `SELECT workflow_id FROM workflow_versions WHERE id = ?`, sid).Scan(&wf)
-		var busy int
-		if err := t.QueryRowContext(ctx, `SELECT count(*) FROM phases p JOIN workflow_versions v ON v.id = p.workflow_version_id
-			WHERE v.workflow_id = ? AND v.state = 'approved' AND p.state IN ('Ready for Execution','In Progress','Blocked','Validation','Awaiting Phase Review')`, wf).Scan(&busy); err != nil {
-			return wrap(err, "check running phases")
-		}
-		if busy > 0 {
-			return errInvalidState("A phase of the approved version is still open.", "Complete or fail it before approving a new version.")
-		}
 		var old sql.NullString
 		t.QueryRowContext(ctx, `SELECT id FROM workflow_versions WHERE workflow_id = ? AND state = 'approved'`, wf).Scan(&old)
 		if old.Valid {
+			// The new requirements replace the old ones at once: what the old version still has open ends here, and the agent
+			// chooses its next task from the new version. Nothing is rerun.
+			if err := s.supersedeRunning(ctx, t, old.String, project, a, aprID); err != nil {
+				return err
+			}
 			if err := move("workflow_version", old.String, "superseded", sysActor, ""); err != nil {
 				return err
 			}
@@ -256,6 +263,101 @@ func (s *Service) applyDecision(ctx context.Context, t *Tx, cat, stype, sid, pro
 		return move("execution", sid, "Running", a, aprID)
 	}
 	return nil
+}
+
+// supersedeRunning ends the open work of a workflow version that a newer one replaces, in the transaction of the approval:
+// every execution not yet finished is cancelled (its lease ends, its workspace lock and slot are freed, the agent's next
+// call is refused), every task that is not Done or Cancelled is Cancelled, and the approvals still waiting on them can no
+// longer be decided. Phases keep their state: every view reads the phases of the approved version only.
+func (s *Service) supersedeRunning(ctx context.Context, t *Tx, version, project string, a Actor, aprID string) error {
+	ids := func(q string) ([]string, error) {
+		rows, err := t.QueryContext(ctx, q, version)
+		if err != nil {
+			return nil, wrap(err, "list open work of the old version")
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return nil, wrap(err, "read open work of the old version")
+			}
+			out = append(out, id)
+		}
+		return out, rows.Err()
+	}
+	// Taken before the executions are cancelled: ending an execution already withdraws its risky-action approval, and that one is recorded too.
+	pend, err := t.QueryContext(ctx, `SELECT id, category FROM approvals WHERE state = 'pending' AND (
+		(subject_type = 'phase' AND subject_id IN (SELECT id FROM phases WHERE workflow_version_id = ?1))
+		OR (subject_type = 'task' AND subject_id IN (SELECT t.id FROM tasks t JOIN phases p ON p.id = t.phase_id WHERE p.workflow_version_id = ?1))
+		OR (subject_type = 'execution' AND subject_id IN (SELECT e.id FROM executions e JOIN tasks t ON t.id = e.task_id JOIN phases p ON p.id = t.phase_id WHERE p.workflow_version_id = ?1)))`, version)
+	if err != nil {
+		return wrap(err, "list approvals of the old version")
+	}
+	type pa struct{ id, cat string }
+	var withdrawn []pa
+	for pend.Next() {
+		var x pa
+		if err := pend.Scan(&x.id, &x.cat); err != nil {
+			pend.Close()
+			return wrap(err, "read approval of the old version")
+		}
+		withdrawn = append(withdrawn, x)
+	}
+	err = pend.Err()
+	pend.Close()
+	if err != nil {
+		return wrap(err, "list approvals of the old version")
+	}
+	exes, err := ids(`SELECT e.id FROM executions e JOIN tasks t ON t.id = e.task_id JOIN phases p ON p.id = t.phase_id
+		WHERE p.workflow_version_id = ? AND e.state NOT IN ('Completed','Failed','Cancelled')`)
+	if err != nil {
+		return err
+	}
+	tasks, err := ids(`SELECT t.id FROM tasks t JOIN phases p ON p.id = t.phase_id WHERE p.workflow_version_id = ? AND t.state NOT IN ('Done','Cancelled')`)
+	if err != nil {
+		return err
+	}
+	for _, e := range exes {
+		if _, err := t.ExecContext(ctx, `UPDATE executions SET cancel_requested = 1 WHERE id = ?`, e); err != nil {
+			return wrap(err, "request cancel")
+		}
+		if _, err := s.transition(ctx, t, "execution", e, "Cancelled", a, "superseded by a new workflow version", ""); err != nil {
+			return err
+		}
+	}
+	vph, err := ids(`SELECT p.id FROM phases p WHERE p.workflow_version_id = ? AND p.state = 'Validation'`)
+	if err != nil {
+		return err
+	}
+	for _, ph := range vph { // a queued or restarted validation would look at a replaced phase
+		if _, err := s.transition(ctx, t, "phase", ph, "In Progress", a, "superseded by a new workflow version", ""); err != nil {
+			return err
+		}
+	}
+	for _, k := range tasks {
+		if _, err := s.transition(ctx, t, "task", k, "Cancelled", a, "superseded by a new workflow version", ""); err != nil {
+			return err
+		}
+	}
+	for _, x := range withdrawn {
+		if _, err := t.ExecContext(ctx, `UPDATE approvals SET state = 'cancelled', decided_at = ? WHERE id = ? AND state = 'pending'`, s.ts(), x.id); err != nil {
+			return wrap(err, "withdraw approval of the old version")
+		}
+		t.publish("approval.changed", map[string]string{"approval_id": x.id, "project_id": project, "category": x.cat, "state": "cancelled"})
+		if err := t.audit(ctx, store.AuditRecord{Event: "approval.cancelled", ActorScope: a.Scope, ActorRef: a.Ref, ProjectID: project, Subject: x.id,
+			Detail: map[string]any{"category": x.cat, "reason": "superseded by a new workflow version"}}); err != nil {
+			return err
+		}
+	}
+	if len(withdrawn) > 0 {
+		t.publish("attention.changed", func() any { return map[string]int{"count": s.AttentionCount(ctx)} })
+	}
+	if len(exes)+len(tasks)+len(withdrawn) == 0 {
+		return nil
+	}
+	return t.audit(ctx, store.AuditRecord{Event: "workflow.superseded_running", ActorScope: a.Scope, ActorRef: a.Ref, ProjectID: project, Subject: version,
+		Detail: map[string]any{"executions_cancelled": len(exes), "tasks_cancelled": len(tasks), "approvals_withdrawn": len(withdrawn), "approval_id": aprID}})
 }
 
 // openPhaseGate moves a Planned phase to Awaiting Approval and requests its

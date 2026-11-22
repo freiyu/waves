@@ -33,7 +33,9 @@ func TestHappyPathThroughTheBinary(t *testing.T) {
 	a.must("waves_heartbeat", map[string]any{}, nil)
 	os.WriteFile(filepath.Join(p.dir, "hello.txt"), []byte("hello\n"), 0o600)
 	a.must("waves_submit_result", map[string]any{"summary": "wrote hello.txt", "status": "completed"}, nil)
-	p.dash.mustDecide(p.pending("result"), "approve", nil)
+	if s := i.taskState(task); s != "Done" { // no approval per task: the human decides at the end of the phase
+		t.Fatalf("task is %s after its result, want Done", s)
+	}
 	waitFor(t, 10*time.Second, "phase review", func() bool { _, st := i.phase(p.id, "p1"); return st == "Awaiting Phase Review" })
 	p.dash.mustDecide(p.pending("phase_completion"), "approve", nil)
 	if _, st := i.phase(p.id, "p1"); st != "Completed" {
@@ -82,7 +84,6 @@ func TestDashboardOnTheRealService(t *testing.T) {
 	ra.claim()
 	os.WriteFile(filepath.Join(rp.dir, "hello.txt"), []byte("hello\n"), 0o600)
 	ra.must("waves_submit_result", map[string]any{"summary": "wrote hello.txt", "status": "completed"}, nil)
-	rp.dash.mustDecide(rp.pending("result"), "approve", nil)
 	waitFor(t, 10*time.Second, "phase review", func() bool { _, st := i.phase(rp.id, "p1"); return st == "Awaiting Phase Review" })
 	// A workflow waiting for its approval.
 	wp := i.newProject("review")
@@ -117,7 +118,11 @@ func TestDashboardOnTheRealService(t *testing.T) {
 	cp := i.newProject("toconnect")
 	rp.dash.must("PATCH", "/projects/"+rp.id, map[string]string{"fork_of": xp.id}, nil)
 	iexe, _ := i.execOf(itask)
-	ids, _ := json.Marshal(map[string]string{"gate": gate, "gateProject": gp.id, "workflow": wp.pending("workflow"), "workflowProject": wp.id, "interrupted": iexe, "fork": rp.id, "origin": xp.id, "connect": cp.id})
+	// A running execution that the live spec cancels and retries while the dashboard is open.
+	lp, la := i.planned("live")
+	ltask, _ := la.claim()
+	lexe, _ := i.execOf(ltask)
+	ids, _ := json.Marshal(map[string]string{"live": lexe, "liveTask": ltask, "liveProject": lp.id, "gate": gate, "gateProject": gp.id, "workflow": wp.pending("workflow"), "workflowProject": wp.id, "interrupted": iexe, "fork": rp.id, "origin": xp.id, "connect": cp.id})
 	cmd := exec.Command("npx", "playwright", "test", "-c", "playwright.real.config.ts")
 	cmd.Dir = "../../web"
 	cmd.Env = append(os.Environ(), "WAVES_URL="+i.url(""), "WAVES_OPERATOR_TOKEN="+i.op, "WAVES_PASS="+testPass, "WAVES_IDS="+string(ids))

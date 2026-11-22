@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -29,6 +30,7 @@ var Tools = []string{
 
 type server struct {
 	core *core.Service
+	srv  *sdk.Server
 	// sessions binds each MCP session to the credential that opened it.
 	mu       sync.Mutex
 	sessions map[string]string
@@ -39,8 +41,9 @@ type server struct {
 func Handler(c *core.Service) http.Handler {
 	s := &server{core: c, sessions: map[string]string{}}
 	srv := sdk.NewServer(&sdk.Implementation{Name: "waves", Version: c.Version()}, &sdk.ServerOptions{
-		Instructions: "Waves serves the human-approved plan. Claim a task, follow its context, report progress, heartbeat, and submit the result. Nothing here approves anything.",
+		Instructions: "Waves serves the human-approved plan. Claim a task, follow its context, report progress, and submit the result; your lease lasts while this session stays connected. Nothing here approves anything.",
 	})
+	s.srv = srv
 	s.register(srv)
 	// A call to a tool Waves does not offer (an approval tool, say) is refused by the SDK; record who tried.
 	srv.AddReceivingMiddleware(func(next sdk.MethodHandler) sdk.MethodHandler {
@@ -68,8 +71,69 @@ func Handler(c *core.Service) http.Handler {
 			w.Write([]byte(`{"error":{"code":"unauthenticated","message":"MCP needs the project credential.","next_step":"Run waves agent connect claude-code."}}`))
 			return
 		}
+		// The stream the bridge keeps open (GET) tells Waves the session is connected for as long as it lasts, even while one tool
+		// call runs for minutes and nothing else is said. The session must belong to this credential.
+		// Only a session the SDK still holds counts: for a closed or unknown one the SDK answers 404, and a stream that is refused
+		// must not hold a lease.
+		if sid := r.Header.Get("Mcp-Session-Id"); r.Method == http.MethodGet && sid != "" && s.live(sid) && s.owns(sid, p.CredID) {
+			// The server's write limit would cut a stream that is silent for a minute and then carries a notification.
+			if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+				slog.Warn("mcp stream: the write limit could not be lifted", "err", err)
+			}
+			if err := c.StreamOpen(r.Context(), p, sid); err != nil {
+				slog.Error("mcp stream open", "err", err)
+			} else {
+				defer func() {
+					ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
+					defer cancel()
+					if err := c.StreamClose(ctx, p, sid); err != nil {
+						slog.Error("mcp stream close", "err", err)
+					}
+				}()
+			}
+		}
 		h.ServeHTTP(w, r)
+		// The session that an initialize request just opened belongs to the credential that opened it: a stream may only be
+		// attached by that credential, so no other credential can claim an unbound session id first.
+		if r.Method == http.MethodPost && r.Header.Get("Mcp-Session-Id") == "" {
+			if sid := w.Header().Get("Mcp-Session-Id"); sid != "" {
+				s.bind(sid, p.CredID)
+			}
+		}
 	})
+}
+
+// bind ties an MCP session to the credential that uses it and reports whether it is this one's. Session ids are assigned by
+// the service and random, so a credential that does not hold the session cannot name it.
+func (s *server) bind(sid, cred string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if prev, ok := s.sessions[sid]; ok && prev != cred {
+		return false
+	}
+	// shortcut: the map is reset when it gets large instead of following SDK session ends (same as in caller); a reset only forgets bindings.
+	if len(s.sessions) > 4096 {
+		clear(s.sessions)
+	}
+	s.sessions[sid] = cred
+	return true
+}
+
+// owns reports whether the session was opened by this credential.
+func (s *server) owns(sid, cred string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sessions[sid] == cred
+}
+
+// live reports whether the SDK holds a session with this id.
+func (s *server) live(sid string) bool {
+	for ss := range s.srv.Sessions() {
+		if ss.ID() == sid {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *server) principal(ctx context.Context, h http.Header, src string) core.Principal {
@@ -221,7 +285,7 @@ func (s *server) register(srv *sdk.Server) {
 			l, err := s.core.AvailableTasks(ctx, p)
 			return result(map[string]any{"tasks": l}, err)
 		})
-	sdk.AddTool(srv, &sdk.Tool{Name: "waves_claim_task", Description: "Claim one Ready task. Returns a lease bound to this MCP session; heartbeat at the given interval."},
+	sdk.AddTool(srv, &sdk.Tool{Name: "waves_claim_task", Description: "Claim one Ready task (task taken). Returns a lease bound to this MCP session. The lease lasts while this session stays connected; no heartbeat is needed."},
 		func(ctx context.Context, req *sdk.CallToolRequest, in claimIn) (*sdk.CallToolResult, any, error) {
 			p, sid, err := s.caller(ctx, req)
 			if err != nil {
@@ -253,7 +317,7 @@ func (s *server) register(srv *sdk.Server) {
 			}
 			return result(map[string]bool{"ok": true}, s.core.ReportBlocker(ctx, p, sid, in.LeaseToken, in.Reason))
 		})
-	sdk.AddTool(srv, &sdk.Tool{Name: "waves_request_approval", Description: "Ask the human to allow a risky action. Wait; the decision arrives in the next heartbeat. You cannot approve it yourself."},
+	sdk.AddTool(srv, &sdk.Tool{Name: "waves_request_approval", Description: "Ask the human to allow a risky action. Wait; the decision arrives in the next waves_heartbeat. You cannot approve it yourself."},
 		func(ctx context.Context, req *sdk.CallToolRequest, in approvalIn) (*sdk.CallToolResult, any, error) {
 			p, sid, err := s.caller(ctx, req)
 			if err != nil {
@@ -262,7 +326,7 @@ func (s *server) register(srv *sdk.Server) {
 			id, err := s.core.RequestRiskyApproval(ctx, p, sid, in.LeaseToken, in.Action, in.Reason, in.Impact)
 			return result(map[string]string{"approval_id": id, "state": "pending"}, err)
 		})
-	sdk.AddTool(srv, &sdk.Tool{Name: "waves_submit_result", Description: "Submit the result of your leased task. The lease ends."},
+	sdk.AddTool(srv, &sdk.Tool{Name: "waves_submit_result", Description: "Submit the result of your leased task (task done). The lease ends and the task is Done; the human reviews the results of the whole phase at its end."},
 		func(ctx context.Context, req *sdk.CallToolRequest, in resultIn) (*sdk.CallToolResult, any, error) {
 			p, sid, err := s.caller(ctx, req)
 			if err != nil {
@@ -270,7 +334,7 @@ func (s *server) register(srv *sdk.Server) {
 			}
 			return result(map[string]bool{"ok": true}, s.core.SubmitResult(ctx, p, sid, in.LeaseToken, in.Summary, in.Status, in.Artifacts))
 		})
-	sdk.AddTool(srv, &sdk.Tool{Name: "waves_heartbeat", Description: "Keep your lease alive. Returns whether it is still valid, the phase state, a cancel request, and a pending approval's decision."},
+	sdk.AddTool(srv, &sdk.Tool{Name: "waves_heartbeat", Description: "Check your lease: whether it is still valid, the phase state, a cancel request, and a pending approval's decision. Not needed to keep the lease alive; use it while you wait for an approval decision."},
 		func(ctx context.Context, req *sdk.CallToolRequest, in leaseIn) (*sdk.CallToolResult, any, error) {
 			p, sid, err := s.caller(ctx, req)
 			if err != nil {

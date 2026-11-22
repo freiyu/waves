@@ -155,8 +155,12 @@ func (s *Service) ClaimTask(ctx context.Context, p Principal, mcpSession, taskID
 		}
 		exp := s.now().Add(expireAfter * hb)
 		res.ExpiresAt = exp
+		stored := exp
+		if s.pres.has(project, mcpSession) {
+			stored = s.heldWhileConnected() // the session is connected: no deadline, the time above only matters if it leaves
+		}
 		if _, err := t.ExecContext(ctx, `INSERT INTO leases(id, execution_id, task_id, project_id, token_hash, granted_at, expires_at, last_heartbeat_at, mcp_session) VALUES (?,?,?,?,?,?,?,?,?)`,
-			lease, res.ExecutionID, taskID, project, HashSecret(secret), s.ts(), store.FormatTime(exp), s.ts(), mcpSession); err != nil {
+			lease, res.ExecutionID, taskID, project, HashSecret(secret), s.ts(), store.FormatTime(stored), s.ts(), mcpSession); err != nil {
 			if strings.Contains(err.Error(), "UNIQUE") {
 				return leaseRefused("task_not_ready", "This task is already leased.")
 			}
@@ -278,10 +282,13 @@ func (s *Service) Heartbeat(ctx context.Context, p Principal, mcpSession, token 
 		var cancel int
 		t.QueryRowContext(ctx, `SELECT l.last_heartbeat_at, l.expires_at, e.cancel_requested FROM leases l JOIN executions e ON e.id = l.execution_id WHERE l.id = ?`, l.id).Scan(&last, &exp, &cancel)
 		out.ExpiresAt = store.ParseTime(exp)
+		if out.ExpiresAt.After(s.now().Add(heldFor / 2)) {
+			out.ExpiresAt = s.now().Add(expireAfter * s.heartbeatInterval(ctx)) // held by its connection: the time that applies if it leaves
+		}
 		if s.now().Sub(store.ParseTime(last)) >= minHeartbeat || l.state == "Disconnected" {
 			e := s.now().Add(expireAfter * s.heartbeatInterval(ctx))
 			out.ExpiresAt = e
-			if _, err := t.ExecContext(ctx, `UPDATE leases SET last_heartbeat_at = ?, expires_at = ? WHERE id = ?`, s.ts(), store.FormatTime(e), l.id); err != nil {
+			if _, err := t.ExecContext(ctx, `UPDATE leases SET last_heartbeat_at = ?, expires_at = ? WHERE id = ?`, s.ts(), store.FormatTime(s.leaseExpiry(ctx, t, l.id, e)), l.id); err != nil {
 				return wrap(err, "renew lease")
 			}
 		}
@@ -386,8 +393,8 @@ func (s *Service) RequestRiskyApproval(ctx context.Context, p Principal, mcpSess
 	return apr, err
 }
 
-// SubmitResult ends the execution with the agent's result. A completed
-// code-changing task goes to review (Result approval); a read-only task is done.
+// SubmitResult ends the execution with the agent's result. A completed task is Done and the next one can start; the human
+// reviews the results of the whole phase at its end.
 func (s *Service) SubmitResult(ctx context.Context, p Principal, mcpSession, token, summary, status string, artifacts []string) error {
 	if status != "completed" && status != "failed" {
 		return errValidation("status must be completed or failed.", "")
@@ -395,13 +402,14 @@ func (s *Service) SubmitResult(ctx context.Context, p Principal, mcpSession, tok
 	if e := plainText("The summary", summary); e != nil {
 		return e
 	}
+	if status == "completed" && strings.TrimSpace(summary) == "" {
+		return errValidation("A completed result needs a summary of what you did.", "Say what changed and why, then submit again.")
+	}
 	l, err := s.lease(ctx, s.db.R, p, mcpSession, token)
 	if err != nil {
 		return err
 	}
 	diffPath, files := s.captureDiff(ctx, l.execution)
-	// Only a workspace verified equal to what it was at claim time counts as untouched; one that cannot be checked is reviewed.
-	untouched := s.workspaceUnchanged(ctx, l.execution)
 	return s.tx(ctx, func(t *Tx) error {
 		if l, err = s.lease(ctx, t, p, mcpSession, token); err != nil {
 			return err
@@ -424,24 +432,12 @@ func (s *Service) SubmitResult(ctx context.Context, p Principal, mcpSession, tok
 		if _, err := s.transition(ctx, t, "execution", l.execution, "Completed", sysActor, "result submitted", ""); err != nil {
 			return err
 		}
-		var mode string
-		t.QueryRowContext(ctx, `SELECT workspace_mode FROM tasks WHERE id = ?`, l.task).Scan(&mode)
-		// A read-only task that left files changed, or whose workspace cannot be verified, goes to review like any other result.
-		if mode == "read_only" && untouched {
-			if _, err := s.transition(ctx, t, "task", l.task, "Done", sysActor, "read-only result accepted", ""); err != nil {
-				return err
-			}
-			return s.afterTaskTerminal(ctx, t, l.task)
-		}
-		if _, err := s.transition(ctx, t, "task", l.task, "In Review", sysActor, "result needs review", ""); err != nil {
+		// The human judges the results of a whole phase at its end, not each task: a finished task is Done and the next one can start.
+		// The summary and the changed files stay with the execution, and the phase review lists every task with them.
+		if _, err := s.transition(ctx, t, "task", l.task, "Done", sysActor, "result submitted", ""); err != nil {
 			return err
 		}
-		im := map[string]any{"summary": truncate(summary, 500), "files_changed": files, "impact": "Accepting marks the task done and may let the phase move to validation."}
-		apr, err := s.requestApproval(ctx, t, "result", "task", l.task, l.project, "agent", "", im)
-		if err != nil {
-			return err
-		}
-		return s.refreshSubjectHash(ctx, t, apr)
+		return s.afterTaskTerminal(ctx, t, l.task)
 	})
 }
 
@@ -598,19 +594,19 @@ func (s *Service) leaseLoop(ctx context.Context) {
 func (s *Service) expireLeases(ctx context.Context) time.Time {
 	hb := s.heartbeatInterval(ctx)
 	now := s.now()
-	rows, err := s.db.R.QueryContext(ctx, `SELECT l.id, l.execution_id, l.task_id, l.last_heartbeat_at, l.expires_at, e.state, EXISTS(SELECT 1 FROM execution_waits w WHERE w.execution_id = e.id AND w.ended_at IS NULL) FROM leases l JOIN executions e ON e.id = l.execution_id WHERE l.revoked_at IS NULL`)
+	rows, err := s.db.R.QueryContext(ctx, `SELECT l.id, l.execution_id, l.task_id, l.last_heartbeat_at, l.expires_at, e.state, EXISTS(SELECT 1 FROM execution_waits w WHERE w.execution_id = e.id AND w.ended_at IS NULL), COALESCE(l.mcp_session,''), l.project_id FROM leases l JOIN executions e ON e.id = l.execution_id WHERE l.revoked_at IS NULL`)
 	if err != nil {
 		s.log.Error("read leases", "err", err)
 		return now.Add(time.Minute)
 	}
 	type lr struct {
-		id, exe, task, last, exp, state string
-		waiting                         bool
+		id, exe, task, last, exp, state, session, project string
+		waiting                                           bool
 	}
 	var all []lr
 	for rows.Next() {
 		var l lr
-		rows.Scan(&l.id, &l.exe, &l.task, &l.last, &l.exp, &l.state, &l.waiting)
+		rows.Scan(&l.id, &l.exe, &l.task, &l.last, &l.exp, &l.state, &l.waiting, &l.session, &l.project)
 		all = append(all, l)
 	}
 	rows.Close()
@@ -621,7 +617,26 @@ func (s *Service) expireLeases(ctx context.Context) time.Time {
 		}
 	}
 	for _, l := range all {
+		if s.pres.has(l.project, l.session) {
+			continue // a connected session keeps its lease: silence is not how this lease ends
+		}
 		exp := store.ParseTime(l.exp)
+		if exp.After(now.Add(heldFor / 2)) {
+			// It carries the deadline of a connected session, but no stream is counted: the close was lost (a failed write, a
+			// rollback). Give it the grace period a closed stream gets.
+			if err := s.tx(ctx, func(t *Tx) error {
+				if s.pres.has(l.project, l.session) { // a stream opened since the list was read
+					return nil
+				}
+				return s.leaveSession(ctx, t, l.project, l.session)
+			}); err != nil {
+				s.log.Error("end the hold of a lease", "lease", l.id, "err", err)
+				soonest(now.Add(time.Minute))
+			} else {
+				soonest(now.Add(presenceGrace))
+			}
+			continue
+		}
 		disc := store.ParseTime(l.last).Add(disconnectAfter * hb)
 		switch {
 		case !exp.After(now):

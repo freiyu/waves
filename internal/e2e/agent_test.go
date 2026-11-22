@@ -54,52 +54,64 @@ func attention(c *client, kind, ref string) bool {
 	return false
 }
 
-// Hang: the agent stops heartbeating. After 2 intervals the execution is
-// Disconnected; after 6 it is Interrupted and the task Blocked. Crash: the
-// bridge process dies; same outcome, and the lease cannot move to a new
-// MCP session. Both run on real timers (heartbeat 15 s, the minimum).
-func TestAgentHangAndCrash(t *testing.T) {
+// Crash: the bridge process dies. Waves sees the connection go at once: the execution is Disconnected, and when the session
+// does not come back within the grace period it is Interrupted and the task Blocked. The lease cannot move to a new MCP
+// session and nothing is rerun. Real timers: the grace period is 30 s.
+func TestAgentCrash(t *testing.T) {
 	if testing.Short() {
-		t.Skip("real lease timers take 90 s")
+		t.Skip("the grace period is 30 s")
 	}
 	t.Parallel()
 	i := newInst(t)
-	i.setHeartbeat(15)
-	_, hang := i.planned("hang")
 	cp, crash := i.planned("crash")
-	hTask, _ := hang.claim()
 	cTask, cLease := crash.claim()
-	crash.kill()
 	start := time.Now()
-	waitFor(t, 45*time.Second, "Disconnected", func() bool {
-		_, a := i.execOf(hTask)
-		_, b := i.execOf(cTask)
-		return a == "Disconnected" && b == "Disconnected"
-	})
+	crash.kill()
+	waitFor(t, 10*time.Second, "Disconnected", func() bool { _, st := i.execOf(cTask); return st == "Disconnected" })
 	t.Logf("disconnected after %s", time.Since(start).Round(time.Second))
 	// A new MCP session cannot take over the crashed agent's lease.
 	other := cp.agent(i)
 	if text, isErr := other.call("waves_heartbeat", map[string]any{"lease_token": cLease}); !isErr {
 		t.Fatalf("a new session took over the lease: %s", text)
 	}
-	waitFor(t, 75*time.Second, "lease expiry", func() bool {
-		_, a := i.execOf(hTask)
-		_, b := i.execOf(cTask)
-		return a == "Interrupted" && b == "Interrupted"
-	})
+	waitFor(t, 60*time.Second, "lease expiry", func() bool { _, st := i.execOf(cTask); return st == "Interrupted" })
 	t.Logf("interrupted after %s", time.Since(start).Round(time.Second))
-	for _, task := range []string{hTask, cTask} {
-		if s := i.taskState(task); s != "Blocked" {
-			t.Fatalf("task %s, want Blocked", s)
-		}
-		if n := i.count(`SELECT count(*) FROM executions WHERE task_id = ?`, task); n != 1 {
-			t.Fatalf("%d executions: the task was rerun", n)
-		}
+	if s := i.taskState(cTask); s != "Blocked" {
+		t.Fatalf("task %s, want Blocked", s)
 	}
-	// The hung agent wakes up: its lease is gone and it is told to stop.
-	text, isErr := hang.call("waves_heartbeat", map[string]any{})
-	if !isErr || !strings.Contains(text, "lease_invalid") {
-		t.Fatalf("hung agent heartbeat after expiry: %s", text)
+	if n := i.count(`SELECT count(*) FROM executions WHERE task_id = ?`, cTask); n != 1 {
+		t.Fatalf("%d executions: the task was rerun", n)
+	}
+	if text, isErr := other.call("waves_submit_result", map[string]any{"lease_token": cLease, "summary": "late", "status": "completed"}); !isErr || !strings.Contains(text, "lease_invalid") {
+		t.Fatalf("a result after the lease ended: %s", text)
+	}
+}
+
+// A connected agent that says nothing keeps its lease: a long tool call (a build, a test run) makes no call to Waves, and
+// silence is not how a lease ends any more. With a 15 s heartbeat the old rules marked it Disconnected after 30 s.
+func TestConnectedAgentThatIsSilentKeepsItsLease(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits 40 s of silence")
+	}
+	t.Parallel()
+	i := newInst(t)
+	i.setHeartbeat(15)
+	_, a := i.planned("quiet")
+	task, _ := a.claim()
+	time.Sleep(40 * time.Second)
+	if _, st := i.execOf(task); st != "Running" {
+		t.Fatalf("a connected, silent agent's execution is %s after 40 s", st)
+	}
+	var hb struct {
+		LeaseOK bool `json:"lease_ok"`
+	}
+	a.must("waves_heartbeat", map[string]any{}, &hb)
+	if !hb.LeaseOK {
+		t.Fatal("the lease is not valid after the silence")
+	}
+	a.must("waves_submit_result", map[string]any{"summary": "the long build is done", "status": "completed"}, nil)
+	if s := i.taskState(task); s != "Done" {
+		t.Fatalf("task %s after its result, want Done", s)
 	}
 }
 
@@ -258,7 +270,6 @@ func TestPhaseRevisionAfterRejectedReview(t *testing.T) {
 	task, _ := a.claim()
 	os.WriteFile(filepath.Join(p.dir, "hello.txt"), []byte("hello\n"), 0o600)
 	a.must("waves_submit_result", map[string]any{"summary": "wrote hello.txt", "status": "completed"}, nil)
-	p.dash.mustDecide(p.pending("result"), "approve", nil)
 	waitFor(t, 10*time.Second, "review", func() bool { _, st := i.phase(p.id, "p1"); return st == "Awaiting Phase Review" })
 	phase, _ := i.phase(p.id, "p1")
 	var rv contract.PhaseReview
@@ -294,7 +305,6 @@ func TestPhaseRevisionAfterRejectedReview(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(p.dir, "hello.txt"), []byte("hello again\n"), 0o600)
 	a.must("waves_submit_result", map[string]any{"summary": "says hello again", "status": "completed"}, nil)
-	p.dash.mustDecide(p.pending("result"), "approve", nil)
 	waitFor(t, 10*time.Second, "second review", func() bool { _, st := i.phase(p.id, "p1"); return st == "Awaiting Phase Review" })
 	p.dash.must("GET", "/phases/"+phase+"/review", nil, &rv)
 	if rv.RequiresOverride {
@@ -324,7 +334,6 @@ func TestCancelledRedoStillNeedsOverride(t *testing.T) {
 	p, a := i.plannedWith("cancelredo", prop)
 	task, _ := a.claim()
 	a.must("waves_submit_result", map[string]any{"summary": "done", "status": "completed"}, nil)
-	p.dash.mustDecide(p.pending("result"), "approve", nil)
 	waitFor(t, 10*time.Second, "review", func() bool { _, st := i.phase(p.id, "p1"); return st == "Awaiting Phase Review" })
 	phase, _ := i.phase(p.id, "p1")
 	p.dash.mustDecide(p.pending("phase_completion"), "reject", nil)
@@ -335,5 +344,112 @@ func TestCancelledRedoStillNeedsOverride(t *testing.T) {
 	p.dash.must("GET", "/phases/"+phase+"/review", nil, &rv)
 	if !rv.RequiresOverride {
 		t.Fatalf("a cancelled redo cleared the failure: %+v", rv.Validators)
+	}
+}
+
+const threeTaskProposal = `{
+  "schema_version": 1,
+  "summary": "Three small tasks",
+  "risks": [{"description": "none", "severity": "low"}],
+  "phases": [
+    {"key": "p1", "title": "Build", "objective": "Write three files", "deliverables": ["a.txt"],
+     "validators": [{"type": "command", "name": "files exist", "command": "test -f a.txt", "timeout_s": 30}],
+     "tasks": [{"key": "p1-t1", "title": "A", "acceptance_criteria": ["a.txt"]},
+               {"key": "p1-t2", "title": "B", "depends_on": ["p1-t1"], "acceptance_criteria": ["b.txt"]},
+               {"key": "p1-t3", "title": "C", "depends_on": ["p1-t2"], "acceptance_criteria": ["c.txt"]}]}
+  ]
+}`
+
+// Tasks of a phase run one after another with no approval per task; the human decides once, at the end of the phase.
+func TestTasksRunBackToBackAndThePhaseIsApprovedOnce(t *testing.T) {
+	t.Parallel()
+	i := newInst(t)
+	p, a := i.plannedWith("seq", threeTaskProposal)
+	for _, f := range []string{"a.txt", "b.txt", "c.txt"} {
+		task, _ := a.claim()
+		os.WriteFile(filepath.Join(p.dir, f), []byte("x\n"), 0o600)
+		a.must("waves_submit_result", map[string]any{"summary": "wrote " + f, "status": "completed"}, nil)
+		if s := i.taskState(task); s != "Done" {
+			t.Fatalf("%s: task is %s after its result, want Done", f, s)
+		}
+		if n := i.count(`SELECT count(*) FROM approvals WHERE state = 'pending' AND category <> 'phase_completion'`); n != 0 {
+			t.Fatalf("%d approvals wait after %s: the agent is held up by the human", n, f)
+		}
+	}
+	waitFor(t, 10*time.Second, "phase review", func() bool { _, st := i.phase(p.id, "p1"); return st == "Awaiting Phase Review" })
+	if n := i.count(`SELECT count(*) FROM approvals WHERE category = 'result'`); n != 0 {
+		t.Fatalf("%d result approvals were requested", n)
+	}
+	// The review lists every task with what the agent said.
+	var rv contract.PhaseReview
+	phaseID, _ := i.phase(p.id, "p1")
+	p.dash.must("GET", "/phases/"+phaseID+"/review", nil, &rv)
+	if len(rv.Tasks) != 3 || rv.Tasks[2].Summary != "wrote c.txt" {
+		t.Fatalf("review tasks: %+v", rv.Tasks)
+	}
+	// Neither the guard token nor the operator token without a passphrase step-up can give that one approval.
+	for name, c := range map[string]*client{"guard": i.as(i.guard), "operator": i.operator()} {
+		if status, _ := c.call("POST", "/approvals/"+p.pending("phase_completion")+"/decision", map[string]string{"decision": "approve", "override": "x"}, nil, nil); status < 400 {
+			t.Fatalf("the %s token decided the phase: %d", name, status)
+		}
+	}
+	p.dash.mustDecide(p.pending("phase_completion"), "approve", nil)
+	if _, st := i.phase(p.id, "p1"); st != "Completed" {
+		t.Fatalf("phase 1 is %s", st)
+	}
+}
+
+// Approving a new workflow version while a task runs ends that work at once: the execution is cancelled, its lease is gone,
+// the old task is Cancelled (not Ready: nothing is rerun) and the agent is told to stop on its next call.
+func TestApprovingANewVersionCancelsRunningWork(t *testing.T) {
+	t.Parallel()
+	i := newInst(t)
+	p, a := i.planned("replace")
+	task, _ := a.claim()
+	exe, _ := i.execOf(task)
+	p.dash.must("POST", "/projects/"+p.id+"/requirements", map[string]string{"kind": "text", "text": "different requirements"}, nil)
+	p.dash.must("POST", "/projects/"+p.id+"/planning-requests", nil, nil)
+	var req struct {
+		ID string `json:"planning_request_id"`
+	}
+	a.must("waves_get_planning_request", map[string]any{}, &req)
+	var prop map[string]any
+	json.Unmarshal([]byte(sampleProposal), &prop)
+	a.must("waves_submit_workflow_proposal", map[string]any{"planning_request_id": req.ID, "proposal": prop}, nil)
+	var d contract.ProjectDetail
+	p.dash.must("GET", "/projects/"+p.id, nil, &d)
+	v2 := d.Planning.LatestProposal.WorkflowVersionID
+	p.dash.must("POST", "/workflow-versions/"+v2+"/submit", nil, nil)
+	apr := p.pending("workflow")
+	var det contract.ApprovalDetail
+	p.dash.must("GET", "/approvals/"+apr, nil, &det)
+	running := 0
+	for _, w := range det.WillCancel {
+		if w.ExecutionID == exe {
+			running++
+		}
+	}
+	if running != 1 || len(det.WillCancel) < 2 {
+		t.Fatalf("the approval does not say what it cancels: %+v", det.WillCancel)
+	}
+	p.dash.mustDecide(apr, "approve", nil)
+	if _, st := i.execOf(task); st != "Cancelled" {
+		t.Fatalf("execution is %s, want Cancelled", st)
+	}
+	if s := i.taskState(task); s != "Cancelled" {
+		t.Fatalf("old task is %s, want Cancelled", s)
+	}
+	if n := i.count(`SELECT count(*) FROM executions WHERE task_id = ?`, task); n != 1 {
+		t.Fatalf("%d executions: the task was rerun", n)
+	}
+	if text, isErr := a.call("waves_heartbeat", map[string]any{}); !isErr || !strings.Contains(text, "lease_invalid") {
+		t.Fatalf("the agent's next call: %s", text)
+	}
+	if text, isErr := a.call("waves_submit_result", map[string]any{"summary": "late", "status": "completed"}); !isErr || !strings.Contains(text, "lease_invalid") {
+		t.Fatalf("a late result: %s", text)
+	}
+	p.pending("phase_start") // the new version waits at its own first gate
+	if n := i.count(`SELECT count(*) FROM leases WHERE revoked_at IS NULL`); n != 0 {
+		t.Fatalf("%d leases are still active", n)
 	}
 }

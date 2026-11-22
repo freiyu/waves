@@ -86,7 +86,8 @@ func TestWaitingForInstruction(t *testing.T) {
 	if got := i.waitingSince(task); !strings.HasPrefix(got, "running|20") {
 		t.Fatalf("after Stop: %q", got)
 	}
-	// Twice the disconnect limit (30 s at a 15 s heartbeat): still running, because it is waiting, not silent.
+	// Past the old disconnect limit (30 s at a 15 s heartbeat): still running and still waiting. A connected session is never silent in
+	// the old sense; the wait rule on its own (a lease without a stream) is tested in the core package.
 	time.Sleep(36 * time.Second)
 	if got := i.waitingSince(task); !strings.HasPrefix(got, "running|20") {
 		t.Fatalf("a waiting execution changed after the silence limit: %q", got)

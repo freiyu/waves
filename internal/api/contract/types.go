@@ -371,6 +371,8 @@ type ReviewTask struct {
 	DurationS    *int   `json:"duration_s,omitempty"`
 	Attempts     int    `json:"attempts" required:"true"`
 	FilesChanged int    `json:"files_changed" required:"true"`
+	// Summary is what the agent said when it finished the task, for the review at the end of the phase.
+	Summary string `json:"summary,omitempty"`
 }
 
 type Finding struct {
@@ -448,6 +450,17 @@ type ApprovalDetail struct {
 	StepUp            string         `json:"step_up" required:"true" enum:"every_time,window_ok"`
 	RejectNeedsStepUp bool           `json:"reject_needs_stepup" required:"true"`
 	PhaseID           string         `json:"phase_id,omitempty"`
+	// WillCancel lists the work that approving a workflow version ends: every task still open under the version it replaces,
+	// with its running execution when it has one.
+	WillCancel []CancelledWork `json:"will_cancel,omitempty"`
+}
+
+// CancelledWork is one open task that approving a new workflow version cancels.
+type CancelledWork struct {
+	TaskCode string `json:"task_code" required:"true"`
+	Title    string `json:"title,omitempty"`
+	// ExecutionID is set when the task has an execution that is not finished.
+	ExecutionID string `json:"execution_id,omitempty"`
 }
 
 type ApprovalListRequest struct {
@@ -502,9 +515,13 @@ type ExecutionList struct {
 }
 
 type Lease struct {
-	ID                string    `json:"id" required:"true"`
-	ExpiresAt         time.Time `json:"expires_at" required:"true"`
-	HeartbeatInterval int       `json:"heartbeat_interval_s" required:"true"`
+	ID string `json:"id" required:"true"`
+	// Connected is true while the agent's MCP session is connected: the lease then has no deadline and ExpiresAt is absent.
+	Connected bool `json:"connected" required:"true"`
+	// ExpiresAt is when the lease ends if the session is not connected (heartbeat rules, or the grace period after it left).
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// HeartbeatInterval applies to a lease that is not held by a connection.
+	HeartbeatInterval int `json:"heartbeat_interval_s" required:"true"`
 }
 
 type Usage struct {

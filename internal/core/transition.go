@@ -131,6 +131,9 @@ func (s *Service) transition(ctx context.Context, t *Tx, entity, id, to string, 
 	switch entity {
 	case "phase", "task":
 		q, args = q+`, updated_at = ?`, append(args, now)
+		if entity == "task" && from == "Blocked" {
+			q += `, blocked_reason = NULL` // the reason belongs to the block; callers that give a new one do it after the move
+		}
 	case "execution":
 		if to == "Running" {
 			q, args = q+`, started_at = COALESCE(started_at, ?)`, append(args, now)

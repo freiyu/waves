@@ -56,7 +56,7 @@ func (s *Service) waitAudit(ctx context.Context, t *Tx, exe, event, scope string
 // renewWindow gives a lease its normal window again from now: after a wait ended it must not keep the long window the
 // wait stretched it to, and its last sign of life is now.
 func (s *Service) renewWindow(ctx context.Context, t *Tx, lease string) error {
-	e := s.now().Add(expireAfter * s.heartbeatInterval(ctx))
+	e := s.leaseExpiry(ctx, t, lease, s.now().Add(expireAfter*s.heartbeatInterval(ctx)))
 	if _, err := t.ExecContext(ctx, `UPDATE leases SET last_heartbeat_at = ?, expires_at = ? WHERE id = ? AND revoked_at IS NULL`, s.ts(), store.FormatTime(e), lease); err != nil {
 		return wrap(err, "renew lease")
 	}
@@ -132,7 +132,7 @@ func (s *Service) SignalGuard(ctx context.Context, p Principal, sig HookSignal) 
 			if n, _ := res.RowsAffected(); n == 0 {
 				continue // already waiting
 			}
-			if _, err := t.ExecContext(ctx, `UPDATE leases SET last_heartbeat_at = ?, expires_at = ? WHERE id = ?`, store.FormatTime(now), store.FormatTime(now.Add(s.waitingMax(ctx))), l.lease); err != nil {
+			if _, err := t.ExecContext(ctx, `UPDATE leases SET last_heartbeat_at = ?, expires_at = ? WHERE id = ?`, store.FormatTime(now), store.FormatTime(s.leaseExpiry(ctx, t, l.lease, now.Add(s.waitingMax(ctx)))), l.lease); err != nil {
 				return wrap(err, "stretch lease for the wait")
 			}
 			t.publish("execution.changed", map[string]string{"execution_id": l.exe})

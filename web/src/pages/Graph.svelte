@@ -525,7 +525,6 @@
               <dt>Mode</dt><dd>{task.mode === 'read_only' ? 'Read only' : 'Code change'}</dd>
               <dt>Depends on</dt><dd class="mono">{task.depends_on.length ? task.depends_on.join(', ') : 'nothing'}</dd>
               {#if task.execution_id}<dt>Execution</dt><dd class="mono">{task.execution_id}</dd>{/if}
-              {#if task.state_detail}<dt>State</dt><dd>{task.state_detail}</dd>{/if}
             </dl>
             {#if isWaiting(task)}
               <div class="callout waiting">

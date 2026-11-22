@@ -105,7 +105,8 @@ export function seed(now = Date.now()): MockDb {
       { label: 'Version', value: 'v2, replaces v1' }, { label: 'Content hash', value: '7d20…c4be', mono: true },
       { label: 'Phases', value: '4, one added (P4 Release prep)' }, { label: 'Validators', value: '5 commands, 1 checklist' },
     ],
-    impact: 'Approving fixes exactly the commands listed. Waves will run them on this machine when a phase reaches validation.',
+    impact: 'Approving fixes exactly the commands listed. Waves will run them on this machine when the last task of a phase is Done, before you review that phase. It replaces the approved version at once: its 3 open tasks are cancelled, work running under it stops, and approvals waiting on it are withdrawn.',
+    will_cancel: [{ task_code: 'm3-t3', title: 'Persist selected method in checkout state', execution_id: 'exe_a07e52' }, { task_code: 'm3-t4', title: 'Handle declined cards' }, { task_code: 'm4-t1', title: 'Store review checklist' }],
     commands: ['npm test -- --run', 'npm run typecheck', 'npm run build'], subject_hash: 'sh_mwf2_7d20c4be', allowed_decisions: ['approve', 'reject'], step_up: 'window_ok', reject_needs_stepup: true,
   });
   const decided = (id: string, category: ApprovalDetail['category'], label: string, project: string, pid: string, subject: string, min: number): ApprovalDetail => ({
@@ -123,7 +124,7 @@ export function seed(now = Date.now()): MockDb {
   executions.set('exe_a07e52', ex({
     id: 'exe_a07e52', task_id: 'tsk_m3t3', task_code: 'm3-t3', task_title: 'Persist selected method in checkout state', project_id: 'prj_mobile', project_name: 'mobile-checkout',
     state: 'running', started_at: at(7), duration_s: 423, workspace_path: '~/work/mobile-checkout', workspace_locked: true, start_commit: '4be19a7', diff_files: 3,
-    lease: { id: 'lse_5c1e', expires_at: new Date(now + 74_000).toISOString(), heartbeat_interval_s: 15 },
+    lease: { id: 'lse_5c1e', connected: true, heartbeat_interval_s: 15 },
     usage: { tokens_in: 41220, tokens_out: 6904, cost_usd: 0.31 },
     history: [{ at: at(7.05), state: 'queued' }, { at: at(7.03), state: 'starting' }, { at: at(7), state: 'running' }],
     events: [
@@ -134,13 +135,13 @@ export function seed(now = Date.now()): MockDb {
   executions.set('exe_8f3a1c', ex({
     id: 'exe_8f3a1c', task_id: 'tsk_b2t3', task_code: 'p2-t3', task_title: 'Add idempotency keys to POST /charges', project_id: 'prj_billing', project_name: 'billing-api',
     state: 'disconnected', started_at: at(21), duration_s: 1122, workspace_path: '~/work/billing-api', workspace_locked: true, start_commit: '2e7c0d1', diff_files: 6,
-    history: [{ at: at(21), state: 'queued' }, { at: at(21), state: 'running' }, { at: at(3), state: 'disconnected', detail: '3 missed heartbeats' }, { at: at(0), state: 'blocked', detail: 'recovery required' }],
+    history: [{ at: at(21), state: 'queued' }, { at: at(21), state: 'running' }, { at: at(3), state: 'disconnected', detail: 'session left' }, { at: at(0), state: 'blocked', detail: 'recovery required' }],
     events: [{ at: at(4), kind: 'heartbeat', message: 'Last heartbeat' }, { at: at(3), kind: 'state', message: 'Marked Disconnected after 3 missed heartbeats' }],
     recovery: {
       partial_files: 6, partial_added: 188, partial_removed: 21, log_lines: 184, last_log_at: at(4), orphan: { count: 1, command: 'go test ./...' },
       resume_session: '4b0f…c71a', reason: 'Heartbeats stopped and the service saw the session end. Waves did not rerun the task.',
       timeline: [
-        { at: at(21), state: 'running', detail: 'Claimed, lease granted' }, { at: at(4), state: 'running', detail: 'Last heartbeat' },
+        { at: at(21), state: 'running', detail: 'Claimed, lease granted' }, { at: at(4), state: 'running', detail: 'Last guard call' },
         { at: at(3), state: 'disconnected', detail: 'Marked Disconnected' }, { at: at(0), state: 'blocked', detail: 'Task blocked: recovery required' },
       ],
     },
@@ -262,10 +263,10 @@ export function seed(now = Date.now()): MockDb {
         { text: 'Install guide reads correctly end to end', confirmed: true }, { text: 'No page links to a removed section', confirmed: true }, { text: 'Screenshots match the current UI', confirmed: false }] },
     ],
     tasks: [
-      { id: 'tsk_d1t1', code: 'd1-t1', title: 'Inventory all pages', state: 'done', duration_s: 740, attempts: 1, files_changed: 2 },
-      { id: 'tsk_d1t2', code: 'd1-t2', title: 'Fix broken internal links', state: 'done', duration_s: 1611, attempts: 2, files_changed: 9 },
-      { id: 'tsk_d1t3', code: 'd1-t3', title: 'Rewrite the install guide', state: 'done', duration_s: 1086, attempts: 1, files_changed: 6 },
-      { id: 'tsk_d1t4', code: 'd1-t4', title: 'Audit sidebar order', state: 'cancelled', state_detail: 'Cancelled · out of scope', attempts: 0, files_changed: 0 },
+      { id: 'tsk_d1t1', code: 'd1-t1', title: 'Inventory all pages', state: 'done', duration_s: 740, attempts: 1, files_changed: 2, summary: 'Listed 41 pages and their inbound links in docs/inventory.md.' },
+      { id: 'tsk_d1t2', code: 'd1-t2', title: 'Fix broken internal links', state: 'done', duration_s: 1611, attempts: 2, files_changed: 9, summary: 'Fixed 12 broken internal links; the second attempt also fixed the anchors.' },
+      { id: 'tsk_d1t3', code: 'd1-t3', title: 'Rewrite the install guide', state: 'done', duration_s: 1086, attempts: 1, files_changed: 6, summary: 'Rewrote the install guide for the new installer and removed two outdated steps.' },
+      { id: 'tsk_d1t4', code: 'd1-t4', title: 'Audit sidebar order', state: 'cancelled', attempts: 0, files_changed: 0 },
     ],
     findings: [
       { kind: 'unattributed', path: 'content/install.md', detail: 'Modified 11:04, no execution holds this file' },
@@ -285,7 +286,7 @@ export function seed(now = Date.now()): MockDb {
     tasks: [
       task('tsk_b2t1', 'p2-t1', 'Add decimal money type', 'done', [], { execution_id: 'exe_91b2d4' }),
       task('tsk_b2t2', 'p2-t2', 'Migrate invoice totals to decimal', 'done', ['p2-t1'], { execution_id: 'exe_3d7c19' }),
-      task('tsk_b2t3', 'p2-t3', 'Add idempotency keys to POST /charges', 'blocked', ['p2-t1'], { execution_id: 'exe_8f3a1c', state_detail: 'Blocked · recovery required' }),
+      task('tsk_b2t3', 'p2-t3', 'Add idempotency keys to POST /charges', 'blocked', ['p2-t1'], { execution_id: 'exe_8f3a1c' }),
       task('tsk_b2t4', 'p2-t4', 'Write repository tests', 'backlog', ['p2-t3']),
       task('tsk_b2t5', 'p2-t5', 'Audit query plans', 'ready', ['p2-t1'], { mode: 'read_only', execution_id: 'exe_d5e8a0' }),
     ],
@@ -307,7 +308,7 @@ export function seed(now = Date.now()): MockDb {
       task('tsk_m3t1', 'm3-t1', 'Add payment method picker', 'done', []),
       task('tsk_m3t2', 'm3-t2', 'Wire Apple Pay sheet', 'in_review', ['m3-t1'], { execution_id: 'exe_b220f1' }),
       task('tsk_m3t3', 'm3-t3', 'Persist selected method in checkout state', 'in_progress', ['m3-t1'], { execution_id: 'exe_a07e52' }),
-      task('tsk_m3t4', 'm3-t4', 'Fix flaky checkout test', 'blocked', [], { execution_id: 'exe_c41d09', state_detail: 'Blocked · last execution failed' }),
+      task('tsk_m3t4', 'm3-t4', 'Fix flaky checkout test', 'blocked', [], { execution_id: 'exe_c41d09' }),
       task('tsk_m3t5', 'm3-t5', 'Add receipt screen', 'backlog', ['m3-t3']),
     ],
     harness: harnessBrief('enforce', 2), pending_approval_items: pendingOf('prj_mobile'), requirements: [{ source: 'docs/checkout-flow.md', state: 'unchanged' }], planning: {},
@@ -349,7 +350,7 @@ export function seed(now = Date.now()): MockDb {
   const ex2 = (id: string, tid: string, code: string, title: string, state: ExecutionDetail['state'], startedMin: number, dur: number): ExecutionDetail => ({
     id, task_id: tid, task_code: code, task_title: title, project_id: 'prj_refund', project_name: 'billing-api-refund', harness: 'Claude Code', harness_version: '2.1.318', mode: 'harness_driven',
     state, started_at: at(startedMin), duration_s: dur, workspace_path: '~/work/billing-api-refund', workspace_locked: state === 'running', diff_files: 1, events: [], history: [{ at: at(startedMin), state }],
-    lease: state === 'running' ? { id: 'lse_' + id.slice(-4), expires_at: new Date(now + 60_000).toISOString(), heartbeat_interval_s: 15 } : undefined,
+    lease: state === 'running' ? { id: 'lse_' + id.slice(-4), connected: true, heartbeat_interval_s: 15 } : undefined,
   });
   const refundExecs = [
     ex2('exe_r1a2b3', 'tsk_r2t1', 'r2-t1', 'Add refund schema', 'completed', 200, 1800),
@@ -404,7 +405,7 @@ export function seed(now = Date.now()): MockDb {
 
   const rec = (seq: number, min: number, event: string, actor: AuditRecord['actor_scope'], subject: string, detail: string): AuditRecord => ({ seq, at: at(min), event, actor_scope: actor, subject, detail });
   const audit: AuditRecord[] = [
-    rec(1284, 0, 'task.blocked', 'system', 'p2-t3', 'recovery_required'), rec(1283, 3, 'execution.disconnected', 'system', 'exe_8f3a1c', '3 missed heartbeats'),
+    rec(1284, 0, 'task.blocked', 'system', 'p2-t3', JSON.stringify({ from: 'In Progress', to: 'Blocked', trigger: 'recovery required' })), rec(1283, 3, 'execution.disconnected', 'system', 'exe_8f3a1c', JSON.stringify({ from: 'Running', to: 'Disconnected', trigger: 'session left' })),
     rec(1282, 12, 'approval.requested', 'system', 'docs-site P1 Phase Completion', 'category phase_completion'), rec(1281, 27, 'approval.requested', 'system', 'mobile-checkout workflow v2', 'category workflow'),
     rec(1280, 41, 'approval.requested', 'agent', 'm3-t2 Result', 'category result'), rec(1279, 60, 'guard.decision', 'guard', 'mobile-checkout', '2 denied (enforce)'),
     rec(1278, 230, 'approval.approved', 'human', 'billing-api P2 Phase Start', 'passphrase · web · single use'), rec(1277, 230, 'stepup.succeeded', 'human', 'session 7f2c', 'single use'),

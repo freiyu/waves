@@ -42,6 +42,7 @@
     { key: 'dur', label: 'Duration', text: (r) => duration(r.duration_s) },
     { key: 'att', label: 'Attempts', text: (r) => String(r.attempts) },
     { key: 'files', label: 'Files changed', text: (r) => String(r.files_changed) },
+    { key: 'sum', label: 'What the agent said', text: (r) => r.summary ?? '' },
   ];
 
   // A checked item counts as a passed validator and cannot be unchecked, so
@@ -64,7 +65,7 @@
 
 {#snippet vres(r: ValidatorResult)}<Badge state={r.state === 'waiting' ? 'waiting_approval' : r.state} text={resultText(r)} />{/snippet}
 {#snippet vact(r: ValidatorResult)}{#if r.items}<button type="button" class="linkbtn" aria-expanded={open === r.id} onclick={() => (open = open === r.id ? undefined : r.id)}>Confirm items</button>{/if}{/snippet}
-{#snippet tstate(r: ReviewTask)}<Badge state={r.state} text={r.state_detail ?? undefined} />{/snippet}
+{#snippet tstate(r: ReviewTask)}<Badge state={r.state} />{/snippet}
 
 <View {res} label="the phase review">
   {#snippet children(r)}
@@ -103,7 +104,7 @@
             </ul>
           {/each}
         </Panel>
-        <Panel level={3} title="Tasks"><Table label="Tasks" rows={r.tasks} columns={taskCols} rowKey={(t) => t.code} /></Panel>
+        <Panel level={3} title="Every task of the phase"><Table label="Tasks" rows={r.tasks} columns={taskCols} rowKey={(t) => t.code} /></Panel>
         <Panel level={3} title="Unattributed and out-of-scope changes ({r.findings.length})">
           {#each r.findings as f}
             <div class="list-row"><Badge state="blocked" text={f.kind === 'unattributed' ? 'Unattributed' : 'Out of scope'} /><span class="mono">{f.path}</span><span class="muted">{f.detail}</span></div>

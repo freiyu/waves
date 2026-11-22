@@ -32,6 +32,7 @@
     ...approval.facts, // everything the approval carries, including what the agent wrote: the human decides on the whole of it
     { label: 'Requested by', value: approval.requested_by },
     { label: 'Impact', value: approval.impact },
+    ...(approval.will_cancel?.length && mode === 'approve' ? [{ label: 'Cancels', value: `${approval.will_cancel.length} ${approval.will_cancel.length === 1 ? 'task' : 'tasks'}: ` + approval.will_cancel.map((w) => w.task_code + (w.execution_id ? ' (running)' : '')).join(', ') }] : []),
     ...(overrideRequired && mode === 'approve' ? [{ label: 'Override reason', value: override.trim() }] : []),
   ]);
 

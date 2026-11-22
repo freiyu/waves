@@ -63,15 +63,16 @@ Then, in the project folder, start `claude` and say:
 In the dashboard:
 
 1. Open the project and its **Plan** tab. Read the phases, the tasks and the **validator commands** (Waves runs
-   those commands, so read them), then **Submit** the workflow. It now waits in the same tab: **Approve** it.
+   those commands, so read them; they run as soon as the last task of a phase is done, before you review it), then **Submit** the workflow. It now waits in the same tab: **Approve** it.
 2. Approve the **Phase Start** of phase 1. It is listed under **Pending approvals** in the project's Overview tab and
    under **Needs your decision** on the Overview page (the lock icon approves, the cross rejects). Phase gates always
    ask for your passphrase.
-3. In `claude` say: *Work on the next Waves task: claim it, get its context, do the work, heartbeat, and submit the
-   result.* (Claude Code may ask permission for each Waves tool: allow them.) Each result waits for you in the same
-   list: **Approve**, or **Reject** with feedback. The confirmation shows everything the agent wrote.
+3. In `claude` say: *Work through the Waves tasks of this project one after another: claim a task, get its context,
+   do the work, submit the result, then take the next one.* (Claude Code may ask permission for each Waves tool: allow
+   them.) You do not approve each task: Claude Code works through the phase on its own and you decide at its end.
 4. When every task is done, Waves runs the validators and opens the **phase review** in the project's **Review**
-   tab. **Approve** completes the phase and opens the next phase's **Phase Start**.
+   tab. It lists every task with what the agent said, the files that changed and the validator results. **Approve**
+   completes the phase and opens the next phase's **Phase Start**; **Reject** with feedback sends tasks back to Claude Code.
 
 The README has the same walk-through with the terminal alternatives (`waves approval list`,
 `waves approval review <id>`).

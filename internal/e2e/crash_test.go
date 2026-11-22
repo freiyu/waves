@@ -91,7 +91,6 @@ func TestCrashDuringValidation(t *testing.T) {
 	a.claim()
 	os.WriteFile(filepath.Join(p.dir, "hello.txt"), []byte("hello\n"), 0o600)
 	a.must("waves_submit_result", map[string]any{"summary": "done", "status": "completed"}, nil)
-	p.dash.mustDecide(p.pending("result"), "approve", nil)
 	waitFor(t, 10*time.Second, "the validator process", func() bool { return pgrep(marker) })
 	i.kill9()
 	i.start()

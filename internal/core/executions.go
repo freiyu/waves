@@ -91,9 +91,13 @@ func (s *Service) ExecutionDetail(ctx context.Context, id string) (contract.Exec
 	if diff.Valid {
 		d.DiffFiles, _, _, _ = diffStats(diff.String)
 	}
-	var lid, exp string
-	if s.db.R.QueryRowContext(ctx, `SELECT id, expires_at FROM leases WHERE execution_id = ? AND revoked_at IS NULL`, id).Scan(&lid, &exp) == nil {
-		d.Lease = &contract.Lease{ID: lid, ExpiresAt: store.ParseTime(exp), HeartbeatInterval: int(s.heartbeatInterval(ctx).Seconds())}
+	var lid, exp, sess string
+	if s.db.R.QueryRowContext(ctx, `SELECT id, expires_at, COALESCE(mcp_session,'') FROM leases WHERE execution_id = ? AND revoked_at IS NULL`, id).Scan(&lid, &exp, &sess) == nil {
+		d.Lease = &contract.Lease{ID: lid, Connected: s.pres.has(d.ProjectID, sess), HeartbeatInterval: int(s.heartbeatInterval(ctx).Seconds())}
+		if !d.Lease.Connected {
+			at := store.ParseTime(exp)
+			d.Lease.ExpiresAt = &at
+		}
 	}
 	rows, err := s.db.R.QueryContext(ctx, `SELECT ts, to_state, trigger FROM state_transitions WHERE entity_type = 'execution' AND entity_id = ? ORDER BY id`, id)
 	if err == nil {
@@ -120,9 +124,9 @@ func (s *Service) ExecutionDetail(ctx context.Context, id string) (contract.Exec
 		rows.Close()
 	}
 	if st == "Interrupted" || st == "Disconnected" {
-		rec := &contract.Recovery{Reason: "The service stopped or the agent stopped sending heartbeats.", Timeline: d.History}
+		rec := &contract.Recovery{Reason: "The service stopped, or the agent session lost its connection to Waves.", Timeline: d.History}
 		if st == "Disconnected" {
-			rec.Reason = "The agent stopped sending heartbeats. It can still reconnect until the lease expires."
+			rec.Reason = "The agent session lost its connection to Waves. It can still reconnect for a short time."
 		}
 		if start.Valid {
 			if p, n := s.captureDiff(ctx, id); p != "" {
@@ -284,23 +288,21 @@ func (s *Service) ResolveExecution(ctx context.Context, p Principal, id, decisio
 			_, err := s.transition(ctx, t, "task", task, "Ready", a, "retry after recovery", "")
 			return err
 		case "complete_partial":
-			if _, err := t.ExecContext(ctx, `UPDATE executions SET diff_path = ? WHERE id = ?`, store.NullStr(diffPath), id); err != nil {
+			res, _ := json.Marshal(map[string]any{"summary": "Partial work accepted after an interruption on the operator credential, without a passphrase. Check what it left in the diff.", "status": "partial", "files_changed": files})
+			if _, err := t.ExecContext(ctx, `UPDATE executions SET diff_path = ?, result_json = ? WHERE id = ?`, store.NullStr(diffPath), string(res), id); err != nil {
 				return wrap(err, "store diff")
 			}
 			if _, err := s.transition(ctx, t, "execution", id, "Completed", a, "resolved: accept partial work", ""); err != nil {
 				return err
 			}
-			if _, err := s.transition(ctx, t, "task", task, "In Progress", a, "partial result accepted for review", ""); err != nil {
+			if _, err := s.transition(ctx, t, "task", task, "In Progress", a, "partial result accepted by the operator", ""); err != nil {
 				return err
 			}
-			if _, err := s.transition(ctx, t, "task", task, "In Review", sysActor, "partial result needs review", ""); err != nil {
+			// Like any finished task it is Done; the phase review shows it with this summary, and the human judges it there.
+			if _, err := s.transition(ctx, t, "task", task, "Done", sysActor, "partial result accepted", ""); err != nil {
 				return err
 			}
-			apr, err := s.requestApproval(ctx, t, "result", "task", task, project, "operator", "", map[string]any{"summary": "partial work after an interruption", "files_changed": files, "impact": "Accepting marks the task done with the partial changes."})
-			if err != nil {
-				return err
-			}
-			return s.refreshSubjectHash(ctx, t, apr)
+			return s.afterTaskTerminal(ctx, t, task)
 		}
 		return errValidation("Unknown decision.", "Use fail, complete_partial, resume or retry_fresh.")
 	})

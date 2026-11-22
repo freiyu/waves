@@ -148,7 +148,7 @@
                   {/snippet}
                 </SectionHead>
                 {#if v.state === 'awaiting_approval' && waiting}<ApprovalCard id={waiting.id} commands={false} />{/if}
-                {#if open}<Note kind="warn"><b>Waves will run these commands</b> on your machine when a phase reaches validation. Approving this workflow approves exactly the strings below. Changing one creates a new version.</Note>{/if}
+                {#if open}<Note kind="warn"><b>Waves will run these commands</b> on your machine when the last task of a phase is Done, before you review that phase, so they also run on what the agents wrote. Approving this workflow approves exactly the strings below. Changing one creates a new version.</Note>{/if}
                 {#each v.phases as ph (ph.id)}
                   <Panel title="{ph.code} {ph.title}" level={3}>
                     <div class="pb stack">

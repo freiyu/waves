@@ -100,7 +100,7 @@
               <Note kind="dng" role="alert"><b>The guard is not active here.</b> {g.drift}. The hook is not what Waves installed. Fix the file, then set the policy again to write the hook back.</Note>
             {/if}
             {#if g.installed && !g.waiting_hooks}
-              <Note kind="neu" icon="prompt"><b>Waiting for instruction is not active here.</b> This project was connected before Waves could tell when Claude Code waits for you, so a quiet session looks dead and its task moves to recovery required after 3 minutes. <a class="tlink" href={href('/harnesses/connect/' + proj?.id)}>Connect again</a> to install the extra hooks. It asks for your passphrase and keeps the guard policy.</Note>
+              <Note kind="neu" icon="prompt"><b>Waiting for instruction is not active here.</b> This project was connected before Waves could tell when Claude Code waits for you, so the Overview cannot show when it waits for instruction. <a class="tlink" href={href('/harnesses/connect/' + proj?.id)}>Connect again</a> to install the extra hooks. It asks for your passphrase and keeps the guard policy.</Note>
             {/if}
             <Panel title="Guard policy · {proj?.name}">
               {#snippet right()}<Btn sm lock onclick={() => openPolicy(g)}>Change policy</Btn>{/snippet}

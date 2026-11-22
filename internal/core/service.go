@@ -50,6 +50,8 @@ type Service struct {
 	vr      validatorRuns
 	// leasePoke wakes the lease expiry loop.
 	leasePoke chan struct{}
+	// pres counts the open MCP streams of each session: a session with one is connected (see presence.go).
+	pres presence
 	// refusals caps operator-side refusal records, bypasses those of agent
 	// credentials, so flooding one kind cannot push the other out of the log.
 	refusals refusalLimit
@@ -71,7 +73,7 @@ func New(o Options) *Service {
 		o.Bus = events.New()
 	}
 	return &Service{db: o.DB, bus: o.Bus, dirs: o.Dirs, version: o.Version, argon: o.Argon, now: o.Now, log: o.Log,
-		vr: validatorRuns{pids: map[int]bool{}, jobs: make(chan string, 64)}, leasePoke: make(chan struct{}, 1)}
+		vr: validatorRuns{pids: map[int]bool{}, jobs: make(chan string, 64)}, leasePoke: make(chan struct{}, 1), pres: presence{open: map[string]int{}}}
 }
 
 // Version is the server version string.

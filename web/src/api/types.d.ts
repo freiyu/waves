@@ -2449,6 +2449,7 @@ export interface components {
             step_up: "every_time" | "window_ok";
             subject: string;
             subject_hash: string;
+            will_cancel?: components["schemas"]["ContractCancelledWork"][];
         };
         ContractApprovalFact: {
             label: string;
@@ -2517,6 +2518,11 @@ export interface components {
             /** Format: date-time */
             at: string;
             bytes: number;
+        };
+        ContractCancelledWork: {
+            execution_id?: string;
+            task_code: string;
+            title?: string;
         };
         ContractCapability: {
             name: string;
@@ -2799,8 +2805,9 @@ export interface components {
             version: string;
         };
         ContractLease: {
+            connected: boolean;
             /** Format: date-time */
-            expires_at: string;
+            expires_at?: null | string;
             heartbeat_interval_s: number;
             id: string;
         };
@@ -2986,6 +2993,7 @@ export interface components {
             /** @enum {string} */
             state: "backlog" | "ready" | "in_progress" | "waiting_approval" | "in_review" | "blocked" | "done" | "cancelled";
             state_detail?: string;
+            summary?: string;
             title: string;
         };
         ContractSession: {

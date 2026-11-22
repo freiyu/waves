@@ -54,7 +54,7 @@
 
 {#snippet eid(r: ExecutionSummary)}<a class="mono" href={href('/executions/' + r.id)}>{r.id}</a>{/snippet}
 {#snippet menu(r: ExecutionSummary)}<RowMenu label="Actions for {r.id}" items={[{ label: 'Open execution', icon: 'exec', run: () => go('/executions/' + r.id) }, { label: 'Copy id', icon: 'copy', run: () => copyText(r.id) }]} />{/snippet}
-{#snippet st(r: ExecutionSummary)}{#if r.waiting_since}<Badge state="waiting_for_instruction" />{:else}<Badge state={r.state} text={r.state_detail ? `${label(r.state)} · ${r.state_detail}` : undefined} />{/if}{/snippet}
+{#snippet st(r: ExecutionSummary)}{#if r.waiting_since}<Badge state="waiting_for_instruction" />{:else}<Badge state={r.state} />{/if}{/snippet}
 
 <PageHead title="Executions" />
 <View {res} label="executions">

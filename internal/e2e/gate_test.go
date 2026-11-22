@@ -64,6 +64,8 @@ var localRefusals = map[string]string{
 	"database: forged approved approval row":            dbLocal,
 	"database: forged gate transition":                  dbLocal,
 	"database: direct state update":                     dbLocal,
+	"database: forged In Review to Done by the system":  dbLocal,
+	"database: a finished execution run again":          dbLocal,
 }
 
 const (
@@ -107,6 +109,23 @@ func TestGateBypass(t *testing.T) {
 	work, wa := i.planned("work")
 	_, lease := wa.claim()
 	mcpTok := i.secret("mcp/" + p.id + ".token")
+	// A project whose task runs while a new workflow version waits for approval: the approval would cancel that work.
+	rep, ra := i.planned("replace")
+	rtask, _ := ra.claim()
+	rexe, _ := i.execOf(rtask)
+	rep.dash.must("POST", "/projects/"+rep.id+"/requirements", map[string]string{"kind": "text", "text": "different requirements"}, nil)
+	rep.dash.must("POST", "/projects/"+rep.id+"/planning-requests", nil, nil)
+	var rreq struct {
+		ID string `json:"planning_request_id"`
+	}
+	ra.must("waves_get_planning_request", map[string]any{}, &rreq)
+	var rprop map[string]any
+	json.Unmarshal([]byte(sampleProposal), &rprop)
+	ra.must("waves_submit_workflow_proposal", map[string]any{"planning_request_id": rreq.ID, "proposal": rprop}, nil)
+	var rdet contract.ProjectDetail
+	rep.dash.must("GET", "/projects/"+rep.id, nil, &rdet)
+	rep.dash.must("POST", "/workflow-versions/"+rdet.Planning.LatestProposal.WorkflowVersionID+"/submit", nil, nil)
+	replaceApr := rep.pending("workflow")
 	dash := p.dash
 	var d contract.ApprovalDetail
 	dash.must("GET", "/approvals/"+apr, nil, &d)
@@ -261,6 +280,36 @@ func TestGateBypass(t *testing.T) {
 			text, isErr := ga.call("waves_claim_task", map[string]any{"task_id": task})
 			return isErr, firstLine(text)
 		}},
+		{"replacement workflow, operator token without a passphrase", "api", func() (bool, string) {
+			var rd contract.ApprovalDetail
+			rep.dash.must("GET", "/approvals/"+replaceApr, nil, &rd)
+			st, code := i.operator().call("POST", "/approvals/"+replaceApr+"/decision", map[string]string{"decision": "approve", "subject_hash": rd.SubjectHash}, nil, nil)
+			if _, state := i.execOf(rtask); state != "Running" {
+				return false, "the running execution is " + state
+			}
+			return st >= 400, fmt.Sprintf("%d %s", st, code)
+		}},
+		{"replacement workflow, MCP token of the running project", "api", func() (bool, string) {
+			var rd contract.ApprovalDetail
+			rep.dash.must("GET", "/approvals/"+replaceApr, nil, &rd)
+			st, code := i.as(i.secret("mcp/"+rep.id+".token")).call("POST", "/approvals/"+replaceApr+"/decision", map[string]string{"decision": "approve", "subject_hash": rd.SubjectHash}, nil, nil)
+			if exe, state := i.execOf(rtask); exe != rexe || state != "Running" {
+				return false, "the running execution is " + state
+			}
+			return st >= 400, fmt.Sprintf("%d %s", st, code)
+		}},
+		{"replacement workflow, lease token", "api", func() (bool, string) {
+			var rd contract.ApprovalDetail
+			rep.dash.must("GET", "/approvals/"+replaceApr, nil, &rd)
+			st, code := i.as(lease).call("POST", "/approvals/"+replaceApr+"/decision", map[string]string{"decision": "approve", "subject_hash": rd.SubjectHash}, nil, nil)
+			return st >= 400 && func() bool { _, s := i.execOf(rtask); return s == "Running" }(), fmt.Sprintf("%d %s", st, code)
+		}},
+		{"replacement workflow, guard token", "api", func() (bool, string) {
+			var rd contract.ApprovalDetail
+			rep.dash.must("GET", "/approvals/"+replaceApr, nil, &rd)
+			st, code := i.as(i.guard).call("POST", "/approvals/"+replaceApr+"/decision", map[string]string{"decision": "approve", "subject_hash": rd.SubjectHash}, nil, nil)
+			return st >= 400 && func() bool { _, s := i.execOf(rtask); return s == "Running" }(), fmt.Sprintf("%d %s", st, code)
+		}},
 		{"database: forged approved approval row", "database", func() (bool, string) {
 			_, err := db.Exec(`UPDATE approvals SET state = 'approved', decided_at = '2026-01-01T00:00:00Z', decided_by_scope = 'human', stepup_method = 'passphrase' WHERE id = ?`, apr)
 			return err != nil && strings.Contains(err.Error(), "state <> 'approved'"), errText(err)
@@ -268,6 +317,14 @@ func TestGateBypass(t *testing.T) {
 		{"database: forged gate transition", "database", func() (bool, string) {
 			_, err := db.Exec(`INSERT INTO state_transitions(entity_type, entity_id, from_state, to_state, trigger, actor_scope, ts) VALUES ('phase', ?, 'Awaiting Approval', 'Approved', 'x', 'human', 't')`, phase)
 			return err != nil && strings.Contains(err.Error(), "needs a decided human approval"), errText(err)
+		}},
+		{"database: forged In Review to Done by the system", "database", func() (bool, string) {
+			_, err := db.Exec(`INSERT INTO state_transitions(entity_type, entity_id, from_state, to_state, trigger, actor_scope, ts) VALUES ('task', ?, 'In Review', 'Done', 'x', 'system', 't')`, rtask)
+			return err != nil && strings.Contains(err.Error(), "illegal transition"), errText(err)
+		}},
+		{"database: a finished execution run again", "database", func() (bool, string) {
+			_, err := db.Exec(`INSERT INTO state_transitions(entity_type, entity_id, from_state, to_state, trigger, actor_scope, ts) VALUES ('execution', ?, 'Completed', 'Running', 'x', 'system', 't')`, rexe)
+			return err != nil && strings.Contains(err.Error(), "illegal transition"), errText(err)
 		}},
 		{"database: direct state update", "database", func() (bool, string) {
 			_, err := db.Exec(`UPDATE phases SET state = 'Ready for Execution' WHERE id = ?`, phase)

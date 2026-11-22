@@ -3,6 +3,7 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,13 +19,13 @@ func (a *agentFlow) doneTask1(t *testing.T) {
 	if err := a.s.SubmitResult(a.ctx, a.agent, "s1", r.LeaseToken, "added handler", "completed", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.decide(t, a.p, a.pendingApproval(t, "result", t1), "approve", false); err != nil {
-		t.Fatal(err)
+	if a.state(t, "tasks", t1) != "Done" {
+		t.Fatalf("a finished task is %s, want Done (no approval per task)", a.state(t, "tasks", t1))
 	}
 }
 
-// A task declared read-only that left a file behind is not read-only: its result is reviewed like any other.
-func TestReadOnlyTaskThatChangedFilesIsReviewed(t *testing.T) {
+// A task declared read-only that left a file behind is not read-only: the phase review says so next to its summary.
+func TestReadOnlyTaskThatChangedFilesIsFlaggedInTheReview(t *testing.T) {
 	a := startedFlow(t)
 	a.doneTask1(t)
 	t2 := a.task(t, "p1-t2")
@@ -36,12 +37,22 @@ func TestReadOnlyTaskThatChangedFilesIsReviewed(t *testing.T) {
 	if err := a.s.SubmitResult(a.ctx, a.agent, "s1", r.LeaseToken, "docs", "completed", nil); err != nil {
 		t.Fatal(err)
 	}
-	if a.state(t, "tasks", t2) != "In Review" {
-		t.Fatalf("a read-only task that wrote a file is %s, want In Review", a.state(t, "tasks", t2))
+	if a.state(t, "tasks", t2) != "Done" || a.pending("result", t2) {
+		t.Fatalf("a read-only task that wrote a file is %s, want Done without a result approval", a.state(t, "tasks", t2))
 	}
-	if a.pendingApproval(t, "result", t2) == "" {
-		t.Fatal("no result approval was requested")
+	rv, err := a.s.PhaseReview(a.ctx, a.phase1)
+	if err != nil {
+		t.Fatal(err)
 	}
+	for _, x := range rv.Tasks {
+		if x.ID == t2 {
+			if !strings.HasPrefix(x.Summary, "Read-only task, but files changed.") || !strings.Contains(x.Summary, "docs") {
+				t.Fatalf("the review does not flag the read-only task: %q", x.Summary)
+			}
+			return
+		}
+	}
+	t.Fatal("the task is not in the review")
 }
 
 // A session that holds a lease is judged by that lease's project even when its working folder is in no project, so a

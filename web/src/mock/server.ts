@@ -280,7 +280,7 @@ export function createMock(opts: MockOptions = {}) {
     const apr: ApprovalDetail = {
       id: secret('apr'), category: 'workflow', category_label: 'Workflow', state: 'pending', project_id: v.project_id, project_name: v.project_name, subject: `Workflow v${v.number}`, requested_by: 'Waves', requested_at: iso(now()),
       reject_needs_stepup: true, action: `Approve workflow version ${v.number}`, facts: [{ label: 'Content hash', value: v.content_hash, mono: true }, { label: 'Phases', value: String(v.phases.length) }],
-      impact: 'Approving fixes exactly the commands listed. Waves will run them on this machine when a phase reaches validation.',
+      impact: 'Approving fixes exactly the commands listed. Waves will run them on this machine when the last task of a phase is Done, before you review that phase.',
       commands: v.phases.flatMap((p) => p.validators.filter((x) => x.command).map((x) => x.command!)), subject_hash: 'sh_' + v.id, allowed_decisions: ['approve', 'reject'], step_up: 'window_ok',
     };
     db.approvals.set(apr.id, apr);

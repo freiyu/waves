@@ -404,7 +404,10 @@ func (s *Service) PhaseReview(ctx context.Context, phaseID string) (contract.Pha
 	}
 	tr.Close()
 	r.Diff, r.Findings = s.phaseDiff(ctx, phaseID, r.Tasks)
-	r.Summary = fmt.Sprintf("%d of %d tasks done. %d of %d validators passed. %d files changed across %d executions.", done, len(r.Tasks), len(r.Validators)-failed, len(r.Validators), r.Diff.Files, r.Diff.Executions)
+	for i := range r.Tasks {
+		r.Tasks[i].Summary = s.taskResultSummary(ctx, r.Tasks[i].ID, r.Tasks[i].FilesChanged)
+	}
+	r.Summary = fmt.Sprintf("%d of %d tasks marked done. %d of %d validators passed. %d files changed across %d executions.", done, len(r.Tasks), len(r.Validators)-failed, len(r.Validators), r.Diff.Files, r.Diff.Executions)
 	// One rule for the screen and for Decide: reviewNeedsOverride.
 	needs, err := s.reviewNeedsOverride(ctx, s.db.R, phaseID)
 	if err != nil {
@@ -420,6 +423,27 @@ func (s *Service) PhaseReview(ctx context.Context, phaseID string) (contract.Pha
 	s.db.R.QueryRowContext(ctx, `SELECT id FROM approvals WHERE subject_id = ? AND category = 'phase_completion' AND state = 'pending'`, phaseID).Scan(&apr)
 	r.ApprovalID = apr.String
 	return r, nil
+}
+
+// taskResultSummary is what the agent said when it finished the task, shown in the phase review. A read-only task that
+// changed files says so first, because no one judged the result before the phase review.
+func (s *Service) taskResultSummary(ctx context.Context, task string, files int) string {
+	var mode string
+	var rj sql.NullString
+	s.db.R.QueryRowContext(ctx, `SELECT t.workspace_mode, (SELECT e.result_json FROM executions e WHERE e.task_id = t.id AND e.result_json IS NOT NULL ORDER BY e.rowid DESC LIMIT 1) FROM tasks t WHERE t.id = ?`, task).Scan(&mode, &rj)
+	var res struct {
+		Summary string `json:"summary"`
+	}
+	json.Unmarshal([]byte(rj.String), &res)
+	sum := []rune(res.Summary)
+	if len(sum) > 500 {
+		sum = sum[:500]
+	}
+	out := Visible(string(sum))
+	if mode == "read_only" && files > 0 {
+		out = strings.TrimSpace("Read-only task, but files changed. " + out)
+	}
+	return out
 }
 
 // ValidatorResult returns one validator's latest result in a phase.
@@ -497,7 +521,19 @@ func (s *Service) ApprovalDetail(ctx context.Context, id string) (contract.Appro
 		fact("Content hash", hash, true)
 		fact("Phases", fmt.Sprint(len(plan.Phases)), false)
 		d.Commands = versionCommands(plan)
-		d.Impact = "Approving locks exactly the commands listed. Waves runs them with /bin/sh in the project folder when a phase reaches validation. Each phase still needs its own start approval."
+		d.Impact = "Approving locks exactly the commands listed. Waves runs them with /bin/sh in the project folder when the last task of a phase is Done, before you review that phase, so they also run on what the agents just wrote. Each phase still needs its own start approval."
+		if d.State == "pending" {
+			items, err := s.openWork(ctx, s.db.R, sid)
+			if err != nil {
+				return d, err // a card that cannot say what it cancels is not shown
+			}
+			for _, w := range items {
+				d.WillCancel = append(d.WillCancel, contract.CancelledWork{TaskCode: Visible(w.code), Title: Visible(truncate(w.title, 120)), ExecutionID: w.exe})
+			}
+			if len(d.WillCancel) > 0 {
+				d.Impact += fmt.Sprintf(" It replaces the approved version at once: its %d open tasks are cancelled, work running under it stops, and approvals waiting on it are withdrawn.", len(d.WillCancel))
+			}
+		}
 	case "phase_start", "phase_completion":
 		d.PhaseID = sid
 		vals, _ := s.validatorsOf(ctx, sid)
@@ -514,7 +550,7 @@ func (s *Service) ApprovalDetail(ctx context.Context, id string) (contract.Appro
 			d.Impact = "Agents can claim this phase's tasks once you approve. Nothing outside this phase opens."
 		} else {
 			d.Action = "Complete phase " + d.Subject
-			d.Impact = "Completing closes the phase and asks for the next phase's start approval. Review the validator results first."
+			d.Impact = "Completing closes the phase and asks for the next phase's start approval. Review what each task did and the validator results first. Validator commands run on what the agents wrote."
 			if rv, err := s.PhaseReview(ctx, sid); err == nil {
 				fact("Summary", rv.Summary, false)
 			}
@@ -545,4 +581,28 @@ func (s *Service) ApprovalDetail(ctx context.Context, id string) (contract.Appro
 		}
 	}
 	return d, nil
+}
+
+type openItem struct{ code, title, task, state, exe string }
+
+// openWork lists what approving the workflow version `next` ends: every task not yet Done or Cancelled in the version it
+// replaces, with its unfinished execution if any. The approval screen shows it, and it is part of the subject hash, so work
+// that started after the screen was opened makes the approval stale instead of being cancelled unseen.
+func (s *Service) openWork(ctx context.Context, q store.Execer, next string) ([]openItem, error) {
+	rows, err := q.QueryContext(ctx, `SELECT upper(t.key), t.title, t.id, t.state, COALESCE((SELECT e.id FROM executions e WHERE e.task_id = t.id AND e.state NOT IN ('Completed','Failed','Cancelled') ORDER BY e.rowid DESC LIMIT 1),'')
+		FROM tasks t JOIN phases p ON p.id = t.phase_id JOIN workflow_versions v ON v.id = p.workflow_version_id JOIN workflow_versions n ON n.workflow_id = v.workflow_id
+		WHERE n.id = ? AND v.state = 'approved' AND v.id <> n.id AND t.state NOT IN ('Done','Cancelled') ORDER BY p.position, t.position`, next)
+	if err != nil {
+		return nil, wrap(err, "list the work the new version replaces")
+	}
+	defer rows.Close()
+	var out []openItem
+	for rows.Next() {
+		var w openItem
+		if err := rows.Scan(&w.code, &w.title, &w.task, &w.state, &w.exe); err != nil {
+			return nil, wrap(err, "read open work")
+		}
+		out = append(out, w)
+	}
+	return out, rows.Err()
 }

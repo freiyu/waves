@@ -5,7 +5,7 @@ enforces it, and a few limits (below) remain on the same machine.
 
 ## What is enforced
 
-- **Approval is enforced by the service, not by prompts.** A phase gate, a result, a workflow or a risky action
+- **Approval is enforced by the service, not by prompts.** A phase gate (start and completion), a workflow or a risky action
   moves only when the Waves service records an approval from the `human` scope. Database triggers refuse state
   changes that skip this.
 - **The human scope exists only after a passphrase step-up.** Operator tokens, guard tokens, lease tokens, MCP
@@ -19,6 +19,9 @@ enforces it, and a few limits (below) remain on the same machine.
   state transitions, refused attempts, guard denials and policy changes. It is verified at
   start, on every status request and before every approval. If a record was altered, approvals are blocked until
   you review and acknowledge it.
+- **You decide once per phase, not once per task.** A task whose result the agent submits is Done at once. At the end of each
+  phase you review every task with the agent's summary, the files that changed and the validator results, and approve with
+  your passphrase. "Done" only means the agent said so.
 - **Interrupted work is never rerun automatically**, there is no automatic merge, and a workflow changes only
   through a new version that you approve.
 - **Waves stores no AI provider credentials.** The database holds only hashes of tokens and of the passphrase.
@@ -37,6 +40,16 @@ task keeps its lease, workspace lock and slot, and the longest wait (Settings, *
 passphrase to change. Anything that holds the guard token and knows a session id can do the same for that session; that is
 inside what is not defended below.
 
+**Validators run before you review.** The approved validator commands run on your machine, with `/bin/sh`, as soon as the last
+task of a phase is Done, so they also run on what the agents just wrote. Read the commands when you approve the workflow, and
+treat the project folder as untrusted until you have reviewed the phase.
+
+**A lease is held by a connection.** While a Claude Code session stays connected, its lease has no deadline. A process
+that hangs without closing its connection keeps its task, workspace lock and slot until you Release or cancel it. Approving a
+new workflow version cancels the work still open under the old one; the approval screen lists it first, and it is never
+rerun. Accepting partial work after an interruption (`Accept partial result`) needs only the operator credential, not the
+passphrase; the task is then Done and shows up in the phase review with a note.
+
 Text that an agent writes for you to decide on (validator commands, titles, risky-action text, result summaries) is
 refused if it contains escape, carriage-return, text-direction or zero-width characters, and stored text is shown with
 such characters spelled out, for example `\u{202E}` for a text-direction override, so what you read is what is stored.
@@ -45,7 +58,7 @@ cannot be checked, has its result reviewed like any other.
 
 Waves compares the hook in your project with the one it installed. A hook that is missing, switched off
 (`disableAllHooks`) or edited shows as not installed in `waves doctor`, `waves guard status` and as a red notice on
-the Guard tab of the Harnesses page. That is detection after the fact, not prevention: while a task is leased an
+the Guard tab of the project (also on the Harnesses page). That is detection after the fact, not prevention: while a task is leased an
 agent can still edit the file through the shell, and nothing alerts you until you look. The check covers only the
 Waves hook entry and `disableAllHooks` in `.claude/settings.local.json`. It does not look at other hooks in that
 file, its `env` setting, other settings files, or `.mcp.json`. Changes to the two connection files also show in execution diffs, even if git ignores them.

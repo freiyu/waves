@@ -58,12 +58,16 @@ second limit, so the command can finish up to 2 seconds after the service is up;
 Version 1.0.0 has no `waves update` and no such notice: to leave 1.0.0, run `install.sh` again. If you ever go back to 1.0.0
 after setting `update_check`, delete that line from `config.json` first: 1.0.0 refuses a config file with a key it does not know.
 
-- `waves update --version 1.0.1` installs that release.
+- `waves update --version X` installs that release (an older one needs `--force`, see above).
 - `waves update --from <folder>` uses `waves-linux-<arch>` and `SHA256SUMS` you downloaded yourself.
 - The checksum catches a damaged download, not a compromised release: both files come from the same place.
 - To install by hand instead: `install.sh` again (or copy the file), `waves stop`, `waves start`.
 
-On the first start a newer version applies its database migrations. Before it changes anything it writes a
+**From 1.0.1 to 1.2.0 there is no database migration.** `waves update` replaces the binary and restarts the service; projects that
+are already connected keep working and need no `waves agent connect` again, and a result that was waiting for your approval in 1.0.1 can still be decided. The 1.0.1
+binary opens the same database again, so going back is `waves update --version 1.0.1 --force`; what finished under 1.2.0 stays as it is.
+
+On the first start a newer version that has migrations applies them. Before it changes anything it writes a
 copy next to the database, `waves.db.pre-v<N>-<time>.bak`. Your projects, workflows, approvals and audit log are
 kept. Running an **older** binary on a database from a newer one is refused, so you cannot damage it by going
 back by mistake. To go back after the new version has started: `waves stop`, move `waves.previous` over `waves`,

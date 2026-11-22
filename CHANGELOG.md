@@ -1,5 +1,56 @@
 # Changelog
 
+## 1.2.0
+
+Claude Code keeps its task during a long build or test run, you approve once per phase instead of once per task, and a new
+workflow can replace one that is running.
+
+**A lease is held by a connection, not a clock**
+- Before, a task whose agent said nothing to Waves for three minutes (a long build or test run is enough) was marked
+  **Disconnected** and then **recovery required**, and the agent's result was refused. Now the lease lasts as long as the
+  agent's session stays connected to Waves. A tool call of any length is fine.
+- If the session disappears (Claude Code or its bridge dies), the execution is **Disconnected** at once and, unless the
+  session returns within 30 seconds, **Interrupted**, with the task **Blocked** for your decision. Nothing is rerun by itself.
+- Agents report three things: the task is taken (claim), ongoing (`waves_report_progress`) and done
+  (`waves_submit_result`). A heartbeat is no longer required; `waves_heartbeat` stays for checking the lease, a cancel
+  request and the decision on a risky action.
+- A tool that does not keep a connection open is held by the old heartbeat rules, and the heartbeat interval setting
+  still applies to it.
+- A connected Claude Code window that waits for you keeps its task, its workspace lock and its slot with no time limit; use
+  **Release** to end it. The longest-wait setting applies only to a session without a connection.
+
+**One approval per phase**
+- Tasks of a phase are done one after another, and a finished task is **Done** at once. You no longer approve each result.
+  At the end of a phase the **Review** tab lists every task with what the agent said, the files that changed and the
+  validator results, and you approve (or reject with feedback and reopen tasks) with your passphrase.
+- Phase starts, phase completions, workflows and risky actions still need your passphrase every time they did before.
+- A completed result must come with a summary. Results that were waiting for approval when you upgrade can still be decided.
+- Validator commands now run as soon as the last task of a phase is Done, before you review it, so they run on what the
+  agents just wrote. Read them when you approve the workflow.
+
+**Replacing a workflow while work runs**
+- Approving a new workflow version no longer waits for the old one to finish. The work still open under the old version is
+  cancelled and is never rerun, approvals waiting on it are withdrawn, and the agent's next call is refused. The approval screen
+  lists what will be cancelled, and goes stale if that list changes while you read it.
+
+**Dashboard**
+- A **Blocked**, **Disconnected** or **Interrupted** task shows its state and nothing else on every page. The reason is on the
+  **Activity** page, which now reads state changes as words (for example "Running → Disconnected · session left").
+- Fixed: a task kept the reason of an earlier block on its badge after you retried it.
+- The Execution page says when a lease is held by the session's connection.
+- Settings explain that the heartbeat interval and the longest wait apply only to a session without a connection.
+
+**Safer**
+- An unknown session cannot attach a connection to another project's lease; a connection opened with a credential that is
+  later revoked is let go.
+- Accepting partial work after an interruption needs only the operator credential (no passphrase) and says so in the phase review.
+
+**Upgrading from 1.0.1**: run `waves update`. There is no database migration, projects that are connected keep working, and
+the 1.0.1 binary opens the same database again (`waves update --version 1.0.1 --force`). **From 1.0.0**: run `install.sh`
+again; the first start migrates the database after writing a backup.
+
+Requirements are unchanged: Linux or WSL2 on amd64 or arm64, `git`, Claude Code. No new runtime dependency.
+
 ## 1.0.1
 
 A redesigned dashboard, tasks that no longer go to **recovery required** while Claude Code waits for you (once the

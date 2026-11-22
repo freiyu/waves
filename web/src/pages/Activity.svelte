@@ -4,6 +4,8 @@
   import { resource } from '../lib/resource.svelte';
   import { clock, ago, plural } from '../lib/format';
   import type { AuditRecord } from '../api/models';
+  import { label } from '../lib/status';
+  import { visible } from '../lib/text';
   import PageHead from '../lib/PageHead.svelte';
   import Panel from '../lib/Panel.svelte';
   import Note from '../lib/Note.svelte';
@@ -20,13 +22,26 @@
   const SECURITY = ['passphrase_reset', 'database_restored', 'stepup_failures', 'bypass_attempt'];
   const pending = $derived(alerts.data?.needs_attention.filter((i) => SECURITY.includes(i.kind)) ?? []);
   let ack = $state(false);
+  // The reason for a state change (a session that left, a lease that ended, work that was replaced) is read here and nowhere else.
+  function detailText(raw: string): string {
+    try {
+      const o = JSON.parse(raw);
+      if (o && typeof o === 'object' && !Array.isArray(o) && typeof o.from === 'string' && typeof o.to === 'string') {
+        const trigger = typeof o.trigger === 'string' ? ' · ' + o.trigger.replace(/_/g, ' ') : '';
+        return visible(`${label(o.from.toLowerCase().replace(/ /g, '_'))} → ${label(o.to.toLowerCase().replace(/ /g, '_'))}${trigger}`);
+      }
+    } catch {
+      /* plain text */
+    }
+    return visible(raw);
+  }
   const cols: Column<AuditRecord>[] = [
     { key: 'seq', label: '#', sort: (r) => r.seq, text: (r) => String(r.seq), mono: true },
     { key: 'at', label: 'Time', sort: (r) => r.at, text: (r) => clock(r.at) },
     { key: 'event', label: 'Event', text: (r) => r.event, mono: true },
     { key: 'actor', label: 'Actor', text: (r) => r.actor_scope },
     { key: 'subject', label: 'Subject', text: (r) => r.subject },
-    { key: 'detail', label: 'Detail', text: (r) => r.detail },
+    { key: 'detail', label: 'Detail', text: (r) => detailText(r.detail) },
   ];
   // Event families for the chips; anything else is reachable through All.
   const family = (r: AuditRecord) =>
@@ -52,7 +67,7 @@
         <div class="mt-2"><Btn lock onclick={() => (ack = true)}>Acknowledge after checking</Btn></div></Note>
     {/if}
     <Panel title="Latest events">
-      <Table label="Audit records" rows={d.items} columns={cols} {filters} rowKey={(r) => String(r.seq)} search={{ placeholder: 'Filter events', text: (r) => `${r.event} ${r.subject} ${r.detail}` }} initialSort={{ key: 'seq', dir: 'desc' }} />
+      <Table label="Audit records" rows={d.items} columns={cols} {filters} rowKey={(r) => String(r.seq)} search={{ placeholder: 'Filter events', text: (r) => `${r.event} ${r.subject} ${detailText(r.detail)}` }} initialSort={{ key: 'seq', dir: 'desc' }} />
     </Panel>
     {#if d.status.state === 'verified'}
       <Note kind="neu" icon="lock"><b>If verification fails,</b> approvals stop, a banner appears on every page, and only a human with the passphrase can acknowledge the break. The records are never rewritten.</Note>

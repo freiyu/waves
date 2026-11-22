@@ -1,6 +1,6 @@
 # Connecting Claude Code
 
-Waves works with Claude Code through two project files. Waves writes only these two files, inside the project folder.
+Waves works with Claude Code through two project files. Waves writes these two files inside the project folder, plus a private token for the project in `~/.config/waves/mcp/` (removed again by `waves agent disconnect`). It changes nothing else.
 
 ## What `waves agent connect claude-code` writes
 
@@ -22,12 +22,17 @@ Claude Code may also ask permission before each Waves tool call; allow them, or 
 ## What the agent can do
 
 Through MCP the agent can read the planning request, submit a workflow proposal, claim a task, read its
-context (including your feedback after a rejected result), send heartbeats and progress, report a blocker,
+context (including your feedback after a rejected phase review), report progress, report a blocker,
 ask approval for a risky action, submit a result, and release a task it cannot finish. It **cannot approve anything**: there is no approval
 operation in MCP, and the tokens it can reach are not allowed to approve.
 
-A task is claimed with a **lease**. While the lease is active only that session works on that task. If the agent
-disconnects, the lease runs out and the task is marked interrupted. **Waves never reruns an interrupted task
+A task is claimed with a **lease**. While the lease is active only that session works on that task. The lease lasts as
+long as the agent's session stays connected to Waves (the `waves mcp` bridge that Claude Code starts keeps one
+connection open to the service), so a long build or test run does not end it, and no timer does either. If the
+session disappears (Claude Code or its bridge dies), the execution is shown as **Disconnected** at once and, unless the
+session comes back within 30 seconds, it is marked **Interrupted** and the task is **Blocked**. A tool or MCP client that
+does not keep such a connection is held by the older heartbeat rule instead: its lease ends after a few intervals (the Settings
+heartbeat interval, 30 seconds by default) without a sign of life. **Waves never reruns an interrupted task
 by itself**: you open the execution on the Executions page and choose to Retry the task, Accept partial result, or Mark failed.
 
 ## The guard hook and its policies
@@ -51,29 +56,26 @@ The hook is a safety net against mistakes and drift. **It is not a sandbox**; se
 Waves checks that the hook in your project is still the one it installed. If it was removed, switched off or
 edited, `waves doctor` shows `FAIL hook <project>`, `waves guard status` warns, and the guard is **not active**.
 Fix the file (remove a `disableAllHooks` setting yourself), then run `waves guard <policy>` (it asks for your
-passphrase) to write the hook back. The Guard tab of the project and the Harnesses page show the same warning. This is a check, not a lock: an
+passphrase) to write the hook back. The Guard tab of the project (also on the Harnesses page) shows the same warning. This is a check, not a lock: an
 agent with a shell can edit the file during a task, and you will see it only afterwards.
 
 ## When Claude Code waits for you
 
-A leased task is kept alive by signs of life from the agent. Claude Code does not send them while it waits for
-your answer in its terminal, so without more Waves would take a quiet session for a dead one and move its task to
-**recovery required** after three minutes. The signal hooks prevent that:
+Claude Code does not send anything to Waves while it waits for your answer in its terminal. The connection keeps the task's
+lease alive anyway. The signal hooks only let Waves *show* that it is waiting:
 
 - When Claude Code finishes a turn and waits for you, the execution is shown as **Waiting for instruction** on the
   Overview, Executions and Graph pages, with how long it has waited. Its state stays Running.
 - A wait does not release anything: the lease, the workspace lock and the concurrency slot stay with the task.
 - The wait ends when you reply in Claude Code, when the agent works again (a file-changing or shell tool call that
-  reaches the guard hook, a Waves tool call, or a heartbeat), or when the session ends. A session that ends while
-  waiting is treated as gone and its task is flagged within a few minutes.
-- A wait also ends the usual way after the **longest wait**: 8 hours by default, 1 to 72, set under **Longest wait
-  for instruction** on the Settings page (it asks for your passphrase). After that the task is Interrupted and needs
-  your decision, as before.
-- You can end a wait yourself with **Release** on the waiting execution (Overview, Executions or Graph). The
-  execution ends as Interrupted; then choose Retry the task, Accept partial result or Mark failed. Waves never reruns
-  the task for you.
-- A file-changing or shell tool call that Waves sees through the guard hook renews the lease like a heartbeat, so a
-  busy agent that forgets to heartbeat is not cut off. Read-only tools such as Read and Grep do not reach the hook.
+  reaches the guard hook, or a Waves tool call), or when the session ends.
+- **There is no longest wait for a connected session**: a Claude Code window that you leave open keeps its task, its workspace lock
+  and its slot until you reply, cancel or close it. If you do not want that, use **Release** on the waiting execution
+  (Overview, Executions or Graph): it ends as Interrupted, then choose Retry the task, Accept partial result or Mark
+  failed. Waves never reruns the task for you. The **Longest wait for instruction** setting (8 hours by default, 1 to 72,
+  Settings, asks for your passphrase) applies only to a session without a connection.
+- A file-changing or shell tool call that Waves sees through the guard hook ends a wait, and for a session without a connection it also renews the lease. Read-only tools such as
+  Read and Grep do not reach the hook.
 
 Projects connected with Waves 1.0.0 do not have the signal hooks. The Harnesses page says so, `waves doctor` prints a
 notice, and connecting again installs them: run `waves agent connect claude-code` again, or use **Connect again** on the
@@ -85,6 +87,7 @@ Harnesses page. Both ask for your passphrase. The guard policy stays as it was.
   every call, binding of a session to its lease, and fail-closed behavior when the service is down.
 - **Observed** with Claude Code 2.1.325 in an interactive session: MCP pickup, the guard hook on the Waves tool calls,
   binding of the session to its lease, and the `Stop`, `UserPromptSubmit` and `SessionEnd` events.
+- **Observed** with Claude Code 2.1.330 in headless mode: one foreground tool call of 200 seconds, and three tasks in a row with that call inside one of them, with no lease lost; killing Claude Code or its bridge closes the connection at once; approving a new workflow version while Claude Code works stops its next call.
 - **Not verified:** a file-changing tool being denied in an interactive session, hook calls made by subagents,
   `NotebookEdit`, a session changing its working directory, and resuming a session that holds a lease. Do not assume
   `enforce` covers them.

@@ -197,3 +197,89 @@ func TestUpdateRollsBackWhenTheNewVersionDoesNotStart(t *testing.T) {
 		t.Fatal("the rolled-back update left waves.previous behind")
 	}
 }
+
+// A user of 1.0.1 runs `waves update` and gets 1.2.0: the real 1.0.1 binary (built from its tag) replaces itself from a release
+// folder with the checksum file, the service restarts on the same database without a migration, a result that waited for approval
+// in 1.0.1 is still decided by a human with the passphrase, and the project's installed hook still runs.
+func TestUpdateFrom101To120OnTheRealBinary(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("linux only")
+	}
+	i := newInst(t)
+	i.stop() // this test runs the background service, as a user would
+	root := t.TempDir()
+	old := filepath.Join(root, "bin", "waves")
+	os.MkdirAll(filepath.Dir(old), 0o755)
+	built := buildReleaseAs(t, "v1.01-stage-7-approved", "1.0.1")
+	b, _ := os.ReadFile(built)
+	if err := os.WriteFile(old, b, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldBytes := b
+	current := bin
+	bin = old
+	defer func() { bin = current }()
+	rel := filepath.Join(root, "release")
+	os.MkdirAll(rel, 0o755)
+	name := "waves-linux-" + runtime.GOARCH
+	buildAs(t, "1.2.0", filepath.Join(rel, name))
+	nb, _ := os.ReadFile(filepath.Join(rel, name))
+	h := sha256.Sum256(nb)
+	os.WriteFile(filepath.Join(rel, "SHA256SUMS"), []byte(hex.EncodeToString(h[:])+"  "+name+"\n"), 0o644)
+
+	if out, code := i.runAs(old, "start"); code != 0 {
+		t.Fatalf("start: %s", out)
+	}
+	t.Cleanup(func() { i.runAs(old, "stop") })
+	if v := i.serverVersion(); v != "1.0.1" {
+		t.Fatalf("service version %q", v)
+	}
+	// What 1.0.1 leaves behind: a task whose result waits for the human's approval.
+	p, a := i.planned("legacy")
+	task, _ := a.claim()
+	os.WriteFile(filepath.Join(p.dir, "hello.txt"), []byte("hello\n"), 0o600)
+	a.must("waves_submit_result", map[string]any{"summary": "wrote hello.txt", "status": "completed"}, nil)
+	if s := i.taskState(task); s != "In Review" {
+		t.Fatalf("1.0.1 leaves the submitted result %s", s)
+	}
+	a.kill()
+	schema := i.count(`SELECT max(version) FROM schema_migrations`)
+
+	out, code := i.runAs(old, "update", "--from", rel)
+	if code != 0 || !strings.Contains(out, "1.0.1 -> 1.2.0") || !strings.Contains(out, "service was restarted") {
+		t.Fatalf("update (exit %d): %s", code, out)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for i.serverVersion() != "1.2.0" && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if v := i.serverVersion(); v != "1.2.0" {
+		t.Fatalf("service version after the update: %q", v)
+	}
+	if b, _ := os.ReadFile(old + ".previous"); string(b) != string(oldBytes) {
+		t.Fatal("the 1.0.1 binary was not kept as waves.previous")
+	}
+	if out, _ := i.runAs(old, "version"); strings.TrimSpace(out) != "waves 1.2.0" {
+		t.Fatalf("version after the update: %q", out)
+	}
+	noLeftovers(t, old)
+	if v := i.count(`SELECT max(version) FROM schema_migrations`); v != schema {
+		t.Fatalf("schema version %d after the update, was %d: 1.2.0 has no migration", v, schema)
+	}
+	if m, _ := filepath.Glob(i.dbPath() + ".pre-v*.bak"); len(m) != 0 {
+		t.Fatalf("a migration backup exists although nothing was migrated: %v", m)
+	}
+	// The result that waited in 1.0.1 is decided as before: not without the passphrase, then by a human with it.
+	apr := p.pending("result")
+	if st, _ := i.operator().call("POST", "/approvals/"+apr+"/decision", map[string]string{"decision": "approve"}, nil, nil); st < 400 {
+		t.Fatalf("the operator token decided the legacy result without a passphrase: %d", st)
+	}
+	i.dashboard().mustDecide(apr, "approve", nil)
+	if s := i.taskState(task); s != "Done" {
+		t.Fatalf("after the human approved it the task is %s", s)
+	}
+	// The hook that 1.0.1 installed in the project still runs under 1.2.0.
+	if code, _ := i.runHook(p.installedHook(t), writeEvent("sess-old", p.dir, filepath.Join(p.dir, "x.txt"), "toolu_up")); code != 0 {
+		t.Fatalf("the 1.0.1 guard hook under 1.2.0: exit %d", code)
+	}
+}

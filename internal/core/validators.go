@@ -3,6 +3,7 @@ package core
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -78,6 +79,9 @@ func (s *Service) RunValidation(ctx context.Context, phaseID string) error {
 	var root, project string
 	err := s.db.R.QueryRowContext(ctx, `SELECT pr.path, pr.id FROM phases p JOIN workflow_versions v ON v.id = p.workflow_version_id JOIN workflows w ON w.id = v.workflow_id JOIN projects pr ON pr.id = w.project_id
 		WHERE p.id = ? AND p.state = 'Validation' AND v.state = 'approved'`, phaseID).Scan(&root, &project)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil // the phase moved on, or its workflow version was replaced since the job was queued
+	}
 	if err != nil {
 		return wrap(err, "read phase for validation")
 	}
@@ -98,13 +102,22 @@ func (s *Service) RunValidation(ctx context.Context, phaseID string) error {
 	}
 	rows.Close()
 	for _, j := range jobs {
+		// The commands of a replaced workflow version are not run: the human replaced it, perhaps to drop one of them.
+		var live int
+		if err := s.db.R.QueryRowContext(ctx, `SELECT count(*) FROM phases p JOIN workflow_versions v ON v.id = p.workflow_version_id WHERE p.id = ? AND p.state = 'Validation' AND v.state = 'approved'`, phaseID).Scan(&live); err != nil {
+			return wrap(err, "check the workflow version before a validator")
+		}
+		if live == 0 {
+			return nil
+		}
 		if err := s.runOne(ctx, project, root, j.id, j.cmd, time.Duration(j.timeout)*time.Second); err != nil {
 			return err
 		}
 	}
 	return s.tx(ctx, func(t *Tx) error {
+		// A validator that ran while a newer workflow version replaced this one must not ask for a review of the old phase.
 		var st string
-		t.QueryRowContext(ctx, `SELECT state FROM phases WHERE id = ?`, phaseID).Scan(&st)
+		t.QueryRowContext(ctx, `SELECT p.state FROM phases p JOIN workflow_versions v ON v.id = p.workflow_version_id WHERE p.id = ? AND v.state = 'approved'`, phaseID).Scan(&st)
 		if st != "Validation" {
 			return nil
 		}

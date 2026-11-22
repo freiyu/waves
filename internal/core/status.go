@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"waves/internal/store"
@@ -81,7 +80,7 @@ func (s *Service) NeedsAttention(ctx context.Context) ([]Attention, error) {
 	// The newest execution of each task, while the human has to act on it: it
 	// lost its agent, or its task is Blocked (failure, interruption, or a
 	// blocker the agent reported). A retried or resolved task drops off.
-	rows, err = s.db.R.QueryContext(ctx, `SELECT e.id, e.state, t.state, COALESCE(t.blocked_reason,''), e.project_id, p.name, t.title,
+	rows, err = s.db.R.QueryContext(ctx, `SELECT e.id, e.state, t.state, e.project_id, p.name, t.title,
 		COALESCE((SELECT max(ts) FROM state_transitions st WHERE st.entity_type IN ('execution','task') AND st.entity_id IN (e.id, t.id)), e.created_at)
 		FROM executions e JOIN projects p ON p.id = e.project_id JOIN tasks t ON t.id = e.task_id
 		WHERE e.rowid = (SELECT max(x.rowid) FROM executions x WHERE x.task_id = e.task_id)
@@ -93,8 +92,8 @@ func (s *Service) NeedsAttention(ctx context.Context) ([]Attention, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var a Attention
-		var state, task, reason, title, at string
-		if err := rows.Scan(&a.RefID, &state, &task, &reason, &a.ProjectID, &a.ProjectName, &title, &at); err != nil {
+		var state, task, title, at string
+		if err := rows.Scan(&a.RefID, &state, &task, &a.ProjectID, &a.ProjectName, &title, &at); err != nil {
 			return nil, wrap(err, "scan execution")
 		}
 		switch state {
@@ -103,7 +102,7 @@ func (s *Service) NeedsAttention(ctx context.Context) ([]Attention, error) {
 		case "Disconnected", "Interrupted":
 			a.Kind, a.Label = "execution_disconnected", state
 		default:
-			a.Kind, a.Label = "task_blocked", "Blocked · "+blockedLabel(reason)
+			a.Kind, a.Label = "task_blocked", "Blocked" // why is in the Activity log, not here
 		}
 		a.Subject, a.RefType, a.Since = a.RefID+" "+title, "execution", store.ParseTime(at)
 		out = append(out, a)
@@ -151,19 +150,4 @@ func (s *Service) ExecutionCounts(ctx context.Context) (Counts, error) {
 		}
 	}
 	return c, rows.Err()
-}
-
-// blockedLabel says why a task is blocked, for the needs-attention label.
-func blockedLabel(reason string) string {
-	switch {
-	case strings.HasPrefix(reason, "blocker:"):
-		return "agent reported a blocker"
-	case reason == "recovery_required" || reason == "interrupted":
-		return "recovery required"
-	case reason == "released_with_changes":
-		return "released with changes"
-	case reason == "execution_failed":
-		return "execution failed"
-	}
-	return "needs your decision"
 }
