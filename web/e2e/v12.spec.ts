@@ -6,6 +6,17 @@ const open = async (page: Page, hash: string, qs = '') => {
 };
 
 // A blocked, disconnected or recovering task is shown by its state alone. Why it happened is read in the Activity log.
+// The pointer of a new test page rests at its top-left corner, over the rail, which opens under a pointer. After every
+// navigation, park it over the page instead.
+test.beforeEach(async ({ page }) => {
+  const goto = page.goto.bind(page);
+  page.goto = async (...args) => {
+    const response = await goto(...args);
+    await page.mouse.move(640, 700);
+    return response;
+  };
+});
+
 test.describe('no reason next to a stuck state', () => {
   test('badges say Blocked and Disconnected and nothing more', async ({ page }) => {
     await open(page, '#/projects/prj_billing');
@@ -54,6 +65,7 @@ test.describe('the end of a phase and a replaced workflow', () => {
     await expect(cancels.getByText('Persist selected method in checkout state')).toBeVisible();
     await expect(cancels.getByText(/exe_a07e52/)).toBeVisible();
     await expect(cancels.getByText(/not rerun automatically/)).toBeVisible();
+    await expect(cancels.getByRole('listitem').first()).toHaveText(/^m3-t3 Persist selected method in checkout state · running as exe_a07e52$/); // words apart
   });
 
   test('a connected lease shows no deadline and no heartbeat', async ({ page }) => {

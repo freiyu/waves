@@ -92,7 +92,7 @@ func TestBudget(t *testing.T) {
 	check("Idle memory (RSS)", fmt.Sprintf("%.1f MB", float64(idle)/mb), "≤ 40 MB", idle <= 40*mb)
 	check("Idle CPU over 5 s (polling check)", fmt.Sprintf("%d ticks (%d ms)", idleCPU, idleCPU*10), "no polling", idleCPU <= 2)
 
-	// Dashboard initial load: HTML, JS and CSS as the server sends them (gzip).
+	// Dashboard initial load: HTML, JS, CSS and the embedded fonts, as the server sends them.
 	page := 0
 	get := func(path string) string {
 		req, _ := http.NewRequest("GET", i.url(path), nil)
@@ -115,10 +115,24 @@ func TestBudget(t *testing.T) {
 		return string(raw)
 	}
 	html := get("/")
+	// Every font a stylesheet names counts, although a browser fetches only the weights a page draws.
+	fonts := 0
+	fontRef := regexp.MustCompile(`url\(["']?(/[^)"']+\.woff2)`)
 	for _, m := range regexp.MustCompile(`(?:src|href)="(/[^"]+)"`).FindAllStringSubmatch(html, -1) {
-		get(m[1])
+		body := get(m[1])
+		if strings.HasSuffix(m[1], ".css") {
+			for _, f := range fontRef.FindAllStringSubmatch(body, -1) {
+				if got := get(f[1]); !strings.HasPrefix(got, "wOF2") {
+					t.Errorf("%s is not a woff2 file", f[1])
+				}
+				fonts++
+			}
+		}
 	}
-	check("Dashboard initial load (gzip as served)", fmt.Sprintf("%d B", page), "≤ 200 KB", page <= 200*1024)
+	if fonts != 5 {
+		t.Errorf("%d fonts in the stylesheets, want 5", fonts)
+	}
+	check(fmt.Sprintf("Dashboard initial load with %d fonts (as served)", fonts), fmt.Sprintf("%d B", page), "≤ 320 KB", page <= 320*1024)
 
 	// Five active executions: five projects, each with a leased task and a
 	// heartbeat, plus five dashboard event streams.

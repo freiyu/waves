@@ -71,6 +71,13 @@ describe('events client', () => {
     const t = start(bus, 1000);
     await vi.advanceTimersByTimeAsync(1100);
     expect(t.states).toContain('stale');
+    await vi.advanceTimersByTimeAsync(2000); // more refused retries
+    expect(t.states.at(-1)).toBe('stale'); // it does not fall back to Reconnecting while nothing came back
+    bus.refuse = false;
+    await vi.advanceTimersByTimeAsync(500);
+    expect(t.states.at(-1)).toBe('live');
+    bus.drop(); // a later, short drop is Reconnecting again
+    expect(t.states.at(-1)).toBe('reconnecting');
     t.c.close();
   });
 

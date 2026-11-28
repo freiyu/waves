@@ -2,7 +2,7 @@
    the row-expand grid track, the icon blur). Entrances use --ease-out, moves --ease-move, nothing bounces, and an exit is
    about 20% shorter than its entrance (--dur-*-out). Nothing tweens while an element is held. Reduced motion turns all of it off.
    Durations: dropdown, tooltip and tab underline 150 to 250 ms, dialog 200/160, page 150, list stagger 30 ms per row,
-   status pulse 1.6 s, skeleton 1.4 s, row flash 600 ms, toast 200 in and 150 out. */
+   status pulse 1.6 s, running wave 2.8 s each way, timeline tide 1.8 s, success mark 2.1 s, skeleton 1.4 s, row flash 600 ms, toast 200 in and 150 out. */
 @keyframes w-page { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes w-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes w-pop-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: none; } }
@@ -25,6 +25,27 @@
 .menu-pop[data-state='open'], .tip[data-state='delayed-open'], .tip[data-state='instant-open'] { animation: w-pop-in var(--dur-fast) var(--ease-out); }
 .menu-pop[data-state='closed'], .tip[data-state='closed'] { animation: w-pop-out var(--dur-fast-out) ease-in forwards; }
 .pulse { animation: w-pulse 1.6s ease-in-out infinite; }
+/* Running work (human, 2026-11-27): a wave seen through a window that travels left and right, short at both ends and long in
+   the middle, while the water inside keeps flowing. It claims no amount. */
+@keyframes w-swell {
+  0% { clip-path: inset(0% 86% 0% 0%); animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0); }
+  50% { clip-path: inset(0% 23% 0% 21%); animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1); }
+  100% { clip-path: inset(0% 0% 0% 86%); }
+}
+/* The water is a layer of its own and moves by transform: it glides between pixels, where a moving mask would step. */
+@keyframes w-flow { to { transform: translateX(40px); } }
+.bar.run { height: 10px; background: linear-gradient(var(--status-active-soft), var(--status-active-soft)) center / 100% 3px no-repeat; }
+.bar.run > i { position: relative; width: 100%; border-radius: 0; background: none; clip-path: inset(0% 86% 0% 0%); animation: w-swell 2.8s linear infinite alternate; }
+.bar.run > i::before { content: ''; position: absolute; inset: 0 0 0 -40px; background: var(--status-active);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='10'%3E%3Cpath d='M-10 8C-6.37 8-3.33 6.57 0 5S6.37 2 10 2S16.67 3.43 20 5S26.37 8 30 8S36.67 6.57 40 5S46.37 2 50 2' fill='none' stroke='black' stroke-width='3'/%3E%3C/svg%3E") 0 50% / 40px 10px repeat-x;
+  animation: w-flow 2.4s linear infinite; }
+/* On the timeline the bar's length is measured time, so only its right end, which is now, moves: one wave, as long as the
+   bar is high, runs down it. */
+@keyframes w-tide { to { transform: translateY(24px); } }
+.tl-track > .tl-bar[data-g='running'] { border-top-right-radius: 0; border-bottom-right-radius: 0; background: linear-gradient(var(--status-active), var(--status-active)) left / calc(100% - 11.5px) 100% no-repeat; }
+.tl-bar[data-g='running']::after { content: ''; position: absolute; right: 0; top: -24px; width: 12px; height: 48px; background: var(--status-active);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='24'%3E%3Cpath d='M0 0H6C8.36 2 10.5 3.8 10.5 6S8.36 10 6 12S1.5 15.8 1.5 18S3.64 22 6 24H0Z'/%3E%3C/svg%3E") 0 0 / 12px 24px repeat-y;
+  animation: w-tide 1.8s linear infinite; }
 .confirm-pulse { animation: w-confirm var(--dur-slow) var(--ease-out); }
 .skeleton { position: relative; overflow: hidden; }
 .skeleton::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 70%, transparent), transparent); animation: w-shimmer 1.4s linear infinite; }
@@ -55,31 +76,6 @@ tr.flash > td { animation: w-flash-bg 600ms ease-out; }
   transition: background-size var(--dur-fast-out) var(--ease-out), color var(--dur-fast-out) var(--ease-out); padding-bottom: 1px; }
 .tlink:hover, .tlink:focus-visible { color: var(--primary); background-size: 100% 2px; transition-duration: var(--dur-base), var(--dur-base); }
 
-/* Icon actions: a 36 px square. On hover or keyboard focus the face grows to the left with a one-word label (also the aria-label); the
-   buttons to its left are pushed left and never covered. On touch there is no hover: 44 px target, the primary keeps its word. */
-.ibtn { display: inline-flex; flex: none; height: 36px; }
-.ibtn > .face { position: relative; z-index: 1; display: flex; flex-direction: row-reverse; align-items: center; width: 36px; height: 36px; overflow: hidden; flex: none;
-  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; padding: 0;
-  transition: width var(--dur-base-out) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast-out) var(--ease-out); }
-.ibtn > .face > .ico { display: grid; place-items: center; flex: none; width: 34px; height: 34px; }
-.ibtn > .face > .lab { flex: none; padding-left: 12px; font-size: 14px; font-weight: 600; white-space: nowrap; opacity: 0; transition: opacity var(--dur-fast-out) var(--ease-out); }
-.ibtn > .face:hover:not(:disabled), .ibtn > .face:focus-visible { width: var(--roll, 124px); transition-duration: var(--dur-base), var(--dur-fast), var(--dur-fast-out); }
-.ibtn > .face:hover:not(:disabled) > .lab, .ibtn > .face:focus-visible > .lab { opacity: 1; }
-.ibtn > .face:active { transform: scale(0.97); }
-.ibtn > .face.pri { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
-.ibtn > .face.dng { color: var(--status-danger); }
-.ibtn > .face:disabled { cursor: not-allowed; opacity: 0.5; }
-@media (pointer: coarse) {
-  .ibtn { height: 44px; }
-  .ibtn > .face { width: 44px; height: 44px; }
-  .ibtn > .face > .ico { width: 42px; height: 42px; }
-  .ibtn > .face:hover, .ibtn > .face:focus-visible { width: 44px; }
-  .ibtn > .face > .lab { display: none; }
-  /* the primary action keeps its word on touch, and a tap must not fold it */
-  .ibtn > .face.pri, .ibtn > .face.pri:hover, .ibtn > .face.pri:focus-visible { width: var(--roll); }
-  .ibtn > .face.pri > .lab { display: block; opacity: 1; }
-}
-
 /* The theme change: the old and new page cross-fade (view transitions), or the colours fade where those are missing. */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 380ms; animation-timing-function: var(--ease-move); }
 .theme-fade, .theme-fade *, .theme-fade *::before, .theme-fade *::after { transition: background-color 360ms var(--ease-move), color 360ms var(--ease-move), border-color 360ms var(--ease-move), fill 360ms var(--ease-move), stroke 360ms var(--ease-move) !important; }
@@ -104,11 +100,13 @@ tr.flash > td { animation: w-flash-bg 600ms ease-out; }
 .swap > * { grid-area: 1 / 1; transition: opacity var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .swap > [data-on='false'] { opacity: 0; filter: blur(3px); transform: scale(0.85); }
 
+/* The highlight behind the current project tab slides to the chosen one. */
+.tab-pill { transition: transform var(--dur-base) var(--ease-move), width var(--dur-base) var(--ease-move); }
 /* The sliding tab indicator moves with an ease-in-out transform (the 12% stretch while it travels is not built). */
 .tab-line { transition: transform var(--dur-base) var(--ease-move); transform-origin: left; }
 
-/* Toasts: square look (radius 4), Waves tokens, 200 ms in and 150 ms out. */
-[data-sonner-toaster] { --normal-bg: var(--surface); --normal-text: var(--text); --normal-border: var(--border); --border-radius: 4px;
+/* Toasts: radius 12, Waves tokens, 200 ms in and 150 ms out. */
+[data-sonner-toaster] { --normal-bg: var(--surface); --normal-text: var(--text); --normal-border: var(--border); --border-radius: 12px;
   --success-bg: var(--surface); --success-text: var(--text); --success-border: var(--border);
   --error-bg: var(--surface); --error-text: var(--text); --error-border: var(--status-danger); font-family: inherit; }
 [data-sonner-toast] { transition-duration: 200ms !important; }
@@ -117,6 +115,8 @@ tr.flash > td { animation: w-flash-bg 600ms ease-out; }
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .panes > .pane { transform: none; }
   .expand > * { overflow: visible; }
+  /* Still, and whole: a short bar that does not move would read as a progress value. */
+  .bar.run > i { clip-path: none; }
 }
 .dots { display: inline-flex; gap: 4px; align-items: center; }
 .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); animation: w-pulse 1.6s ease-in-out infinite; }
@@ -124,10 +124,25 @@ tr.flash > td { animation: w-flash-bg 600ms ease-out; }
 .dots i:nth-child(3) { animation-delay: 0.4s; }
 
 /* A wrong passphrase: the field turns red, shakes once and shows a cross at its right end; the words come below it. */
-@keyframes w-shake { 0%, 100% { transform: none; } 15% { transform: translateX(-7px); } 35% { transform: translateX(6px); } 55% { transform: translateX(-4px); } 75% { transform: translateX(3px); } }
+@keyframes w-shake { 0%, 100% { transform: none; } 12% { transform: translateX(-12px); } 28% { transform: translateX(10px); } 44% { transform: translateX(-8px); } 60% { transform: translateX(6px); } 76% { transform: translateX(-3px); } 88% { transform: translateX(2px); } }
 .pw { position: relative; }
-.pw.bad { animation: w-shake 400ms var(--ease-move); }
+.pw.bad { animation: w-shake 500ms var(--ease-move); }
 .pw.bad > input.field { border-color: var(--status-danger); background: var(--status-danger-soft); padding-right: 40px; }
 .pw.bad > input.field:focus-visible { outline-color: var(--status-danger); }
 .pw-x { position: absolute; right: 10px; top: 50%; translate: 0 -50%; display: grid; color: var(--status-danger); pointer-events: none; animation: w-pop-in var(--dur-base) var(--ease-out); }
 .pw-msg { margin: 6px 0 0; color: var(--status-danger); font-size: 14px; line-height: 20px; }
+
+/* The service accepted a confirmed action: the screen dims, a ring turns, closes and becomes a check (or a cross, which
+   then shakes), the word rises under it, and all of it leaves on its own. The resting styles are the finished picture, which
+   is what reduced motion shows. */
+.donemark { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; pointer-events: none; background: var(--done-dim); color: var(--done-ok); animation: w-fade-in var(--dur-base) var(--ease-out), w-fade-out 200ms ease 1.9s forwards; }
+.donemark.bad { color: var(--done-bad); }
+.donemark > div { display: grid; justify-items: center; gap: 16px; animation: w-pop-in var(--dur-base) var(--ease-out) both; }
+.donemark.no > div { animation: w-pop-in var(--dur-base) var(--ease-out) both, w-shake 500ms var(--ease-move) 1.15s; }
+.donemark svg { width: 96px; height: 96px; }
+.donemark b { color: var(--done-text); font-size: 28px; line-height: 36px; animation: w-rise var(--dur-base) var(--ease-out) 0.9s both; }
+@keyframes w-spin { 0% { transform: rotate(-90deg); opacity: 1; } 85% { opacity: 1; } 100% { transform: rotate(390deg); opacity: 0; } }
+@keyframes w-draw { 0% { stroke-dashoffset: 100; opacity: 0; } 10% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 1; } }
+.donemark .spin { stroke-dasharray: 26 74; transform-origin: center; opacity: 0; animation: w-spin 0.7s linear both; }
+.donemark .ring { stroke-dasharray: 100; animation: w-draw 0.3s var(--ease-out) 0.6s both; }
+.donemark .tick { stroke-dasharray: 100; animation: w-draw 0.25s var(--ease-out) 0.85s both; }

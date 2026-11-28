@@ -2919,6 +2919,13 @@
               "integer"
             ]
           },
+          "ended_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "error": {
             "type": "string"
           },
@@ -3083,6 +3090,13 @@
             "type": [
               "null",
               "integer"
+            ]
+          },
+          "ended_at": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
             ]
           },
           "harness": {
@@ -3701,6 +3715,64 @@
         ],
         "type": "object"
       },
+      "ContractPhaseTask": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "code_change",
+              "read_only"
+            ],
+            "type": "string"
+          },
+          "phase_id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "backlog",
+              "ready",
+              "in_progress",
+              "waiting_approval",
+              "in_review",
+              "blocked",
+              "done",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "state_detail": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "title",
+          "state",
+          "mode",
+          "depends_on",
+          "phase_id"
+        ],
+        "type": "object"
+      },
       "ContractPlanning": {
         "properties": {
           "latest_proposal": {
@@ -3870,6 +3942,12 @@
           "pending_approvals": {
             "type": "integer"
           },
+          "phase_tasks": {
+            "items": {
+              "$ref": "#/components/schemas/ContractPhaseTask"
+            },
+            "type": "array"
+          },
           "phases": {
             "items": {
               "$ref": "#/components/schemas/ContractPhaseRef"
@@ -3914,6 +3992,7 @@
           "guard_policy",
           "phases",
           "tasks",
+          "phase_tasks",
           "pending_approval_items",
           "requirements",
           "planning"

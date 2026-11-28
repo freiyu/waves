@@ -77,8 +77,9 @@
         title={d.status.state === 'verified' ? 'Acknowledge the security alerts' : 'Acknowledge the audit chain break'}
         kicker="Changing this needs your passphrase"
         confirm="Acknowledge"
+        done="Acknowledged"
         needPassphrase={!a.elevationFor()}
-        onconfirm={async (p) => { await a.runElevated(p, (s) => a.api.acknowledgeAudit(s)); ack = false; toast.success(d.status.state === 'verified' ? 'Security alerts acknowledged' : 'Audit chain break acknowledged'); await res.reload(); await alerts.reload(); }}
+        onconfirm={async (p) => { await a.runElevated(p, (s) => a.api.acknowledgeAudit(s)); ack = false; toast.success(d.status.state === 'verified' ? 'Security alerts acknowledged' : 'Audit chain break acknowledged'); void res.reload(); void alerts.reload(); }}
         oncancel={() => (ack = false)}
       >
         {#snippet extra()}<div>Acknowledging records that you have seen it{d.status.state === 'verified' ? '' : ', so approvals can resume'}. It does not repair or undo anything, and the acknowledgement is itself recorded.</div>{/snippet}

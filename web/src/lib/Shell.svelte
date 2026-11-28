@@ -8,11 +8,13 @@
   import { theme, setTheme, type Theme } from './theme.svelte';
   import Icon, { type IconName } from './Icon.svelte';
   import Logo from './Logo.svelte';
+  import DoneMark from './DoneMark.svelte';
   import Note from './Note.svelte';
   import Btn from './Btn.svelte';
   import StepUpDialog from './StepUpDialog.svelte';
   import Palette from './Palette.svelte';
   import Badge from './Badge.svelte';
+  import ConnState from './ConnState.svelte';
   import { menuPop, menuItem, menuHeading } from './ui';
 
   let { children }: { children: Snippet } = $props();
@@ -27,11 +29,11 @@
     { label: 'Overview', path: '/', icon: 'overview', routes: ['overview'] },
     { label: 'Graph', path: '/graph', icon: 'graph', routes: ['graph'] },
     { label: 'Projects', path: '/projects', icon: 'folder', routes: ['projects', 'project', 'requirements', 'plan', 'review', 'phase-review', 'guard'] },
-    { label: 'Executions', path: '/executions', icon: 'exec', routes: ['executions', 'execution', 'recovery'] },
+    { label: 'Executions', path: '/executions', icon: 'pulse', routes: ['executions', 'execution', 'recovery'] },
   ];
   const SYSTEM: Item[] = [
     { label: 'Harnesses', path: '/harnesses', icon: 'plug', routes: ['harnesses', 'connect'] },
-    { label: 'Activity', path: '/activity', icon: 'log', routes: ['activity'] },
+    { label: 'Activity', path: '/activity', icon: 'lines', routes: ['activity'] },
     { label: 'Settings', path: '/settings', icon: 'gear', routes: ['settings'] },
   ];
 
@@ -39,14 +41,13 @@
   const AREA = ['project', 'requirements', 'plan', 'review', 'guard'];
   const pageKey = $derived(AREA.includes(route.name) ? 'area:' + route.params.id : route.name + JSON.stringify(route.params));
   const active = $derived(projects.data?.items.find((p) => p.active));
-  // The Executions pill counts executions that hold a lease (running); interrupted ones are listed on their page.
-  const activeExec = $derived(status.data?.counts.running ?? 0);
   const attention = $derived(status.data?.needs_attention.length ?? 0);
+  // The one warm dot on the rail: an approval waits, and the Overview lists it.
+  const decisions = $derived(status.data?.needs_attention.some((x) => x.kind === 'approval') ?? false);
   const broken = $derived(status.data?.audit.state === 'broken');
-  const conn = $derived(a.state.conn);
-  const liveTone = $derived(conn === 'live' ? 'text-st-ok' : conn === 'stale' ? 'text-st-danger' : 'text-st-warning');
-  const liveLabel = $derived(conn === 'live' ? 'Live' : conn === 'stale' ? 'Stale' : conn === 'reconnecting' ? 'Reconnecting' : 'Connecting');
   const el = $derived(a.state.elevation?.kind === 'window' ? a.state.elevation : null);
+  // The Graph draws its own bar, so the top row gives way there; it returns whenever there is something it must say.
+  const bare = $derived(route.name === 'graph' && !el && !broken && a.state.conn !== 'reconnecting' && a.state.conn !== 'stale' && a.state.session?.passphrase_set !== false);
 
   let menu = $state(false);
   let elevate = $state(false);
@@ -71,7 +72,7 @@
 
 <svelte:window onkeydown={key} />
 <a class="sr-only" href="#main" onclick={(e) => { e.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
-<div class="app" class:rail={route.name === 'graph'}>
+<div class="app">
   {#if menu}<div class="scrim" role="presentation" onclick={() => (menu = false)}></div>{/if}
   <aside class="side" class:open={menu} aria-label="Primary">
     <a class="brand" href={href('/')} aria-label="Waves, overview">
@@ -79,26 +80,24 @@
     </a>
 
     <nav aria-label="Sections">
-      <div class="group-label">Work</div>
-      {#each WORK as n}
-        <a class="nav" href={href(n.path)} aria-current={n.routes.includes(route.name) ? 'page' : undefined}>
-          <Icon name={n.icon} size={20} stroke={2} /><span class="lbl">{n.label}</span>{#if n.label === 'Executions' && activeExec}<span class="cnt">{activeExec}<span class="sr-only"> active</span></span>{/if}
-        </a>
-      {/each}
-      <div class="group-label">System</div>
-      {#each SYSTEM as n}
-        <a class="nav" href={href(n.path)} aria-current={n.routes.includes(route.name) ? 'page' : undefined}><Icon name={n.icon} size={20} stroke={2} /><span class="lbl">{n.label}</span></a>
+      {#each [WORK, SYSTEM] as group, g}
+        {#if g}<span class="nav-gap" aria-hidden="true"></span>{/if}
+        {#each group as n}
+          {@const dot = n.path === '/' && decisions}
+          <a class="nav" href={href(n.path)} aria-current={n.routes.includes(route.name) ? 'page' : undefined}>
+            <Icon name={n.icon} size={22} /><span class="lbl">{n.label}</span>{#if dot}<span class="sig"><span class="sr-only">, decisions waiting</span></span>{/if}
+          </a>
+        {/each}
       {/each}
     </nav>
 
     <DropdownMenu.Root>
       <DropdownMenu.Trigger class="account">
-        <span aria-hidden="true" class="flex size-7 flex-none items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-fg">O</span>
-        <span class="acc-text min-w-0 flex-1 text-left leading-[18px]"><b class="block">Operator</b><span class="block truncate text-xs text-fg-muted">{el ? 'Passphrase unlocked' : 'Passphrase locked'}</span></span>
-        <Icon name="updown" size={14} class="acc-text text-fg-muted" />
+        <Icon name="user" size={20} /><span class="lbl" aria-hidden="true">Operator</span><span class="sr-only">Operator, {el ? 'passphrase unlocked' : 'passphrase locked'}</span>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content side="top" align="start" sideOffset={6} class="{menuPop} w-[var(--bits-dropdown-menu-anchor-width)]">
+        <DropdownMenu.Content side="right" align="end" sideOffset={8} class="{menuPop} w-60">
+          <div class="px-2.5 pt-1.5 pb-1 leading-[18px]"><b class="block">Operator</b><span class="text-xs text-fg-muted">{el ? 'Passphrase unlocked' : 'Passphrase locked'}</span></div>
           <DropdownMenu.RadioGroup value={theme.value} onValueChange={(v) => setTheme(v as Theme)}>
             <DropdownMenu.GroupHeading class={menuHeading}>Theme</DropdownMenu.GroupHeading>
             <div class="mx-1 mb-1 flex gap-0.5 rounded-lg bg-muted p-[3px]">
@@ -120,29 +119,31 @@
   </aside>
 
   <div class="main">
-    <header class="top">
-      <button type="button" class="menu-btn inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 text-[13px] font-semibold" aria-expanded={menu} onclick={() => (menu = !menu)}><Icon name="menu" size={14} />Menu</button>
-      <span class="top-title" aria-hidden="true"></span>
-      <button type="button" class="search" aria-label="Search or jump to" onclick={() => (palette = true)}>
-        <Icon name="search" /><span class="flex-1 text-left">Search or jump to…</span><kbd>Ctrl</kbd><kbd>K</kbd>
-      </button>
+    <header class="top" class:bare>
+      <button type="button" class="menu-btn press mr-auto inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-xl border border-line-strong bg-surface px-3 text-sm font-semibold" aria-expanded={menu} onclick={() => (menu = !menu)}><Icon name="menu" size={14} />Menu</button>
+      <div id="pagecrumb" class="contents"></div>
       <div class="top-right">
-      {#if attention}
-        <a class="no-underline" href={href('/')}><Badge state="awaiting_approval" text="{attention} {attention === 1 ? 'needs' : 'need'} attention" /></a>
+      <button type="button" class="search" aria-label="Search or jump to" title="Search (Ctrl K)" onclick={() => (palette = true)}>
+        <Icon name="search" />
+      </button>
+      {#if attention && route.name !== 'overview'}
+        <a class="inline-flex min-h-11 items-center no-underline" href={href('/')}><Badge state="blocked" text="{attention} {attention === 1 ? 'needs' : 'need'} attention" /></a>
       {/if}
-      <span class="inline-flex min-w-[104px] items-center gap-1.5 text-xs text-fg-muted" role="status">
-        <span class="inline-flex {liveTone}"><Icon name={conn === 'live' ? 'dot' : conn === 'stale' ? 'fail' : 'warn'} size={conn === 'live' ? 10 : 14} /></span>{liveLabel}
-      </span>
+      <ConnState />
       {#if el}
         <Btn sm lock onclick={() => a.dropElevation()} title="Lock again now">Unlocked until {until(el.expiresAt)}<span class="sr-only">. Activate to lock again now.</span></Btn>
       {:else}
-        <Btn sm lock onclick={() => (elevate = true)} title="Elevate: unlock locked actions for a few minutes">Elevate</Btn>
+        <Btn lock class="max-[520px]:hidden" onclick={() => (elevate = true)} title="Elevate: unlock locked actions for a few minutes">Elevate</Btn>
       {/if}
       </div>
+      <div id="pageacts" class="contents"></div>
     </header>
     <main class="page outline-none" class:flush={route.name === 'graph'} id="main" tabindex="-1">
       {#if broken}
         <Note kind="warn" role="alert"><b>The audit chain did not verify</b> at record {status.data?.audit.broken_at_record?.toLocaleString('en')}. Approvals are blocked until a human acknowledges it. <a href={href('/activity')}>Open Activity</a></Note>
+      {/if}
+      {#if a.state.conn === 'stale'}
+        <Note kind="warn" role="alert"><b>The connection to Waves has been lost</b> for over 30 seconds. What you see may be out of date.</Note>
       {/if}
       {#if a.state.session && !a.state.session.passphrase_set}
         <Note kind="info" icon="lock">The approval passphrase is not set, so every approval is unavailable. <a href={href('/welcome')}>What to do</a></Note>
@@ -155,13 +156,15 @@
 </div>
 
 <Palette bind:open={palette} />
+<DoneMark />
 
 {#if elevate}
   <StepUpDialog
     title="Elevate this session"
     kicker="Elevate with your passphrase"
     confirm="Elevate"
-    note="Typed into this page only; not stored, not logged."
+    done="Elevated"
+    note="Sent only to Waves on this machine. Not stored, not logged."
     onconfirm={async (p) => { await a.stepUp(p); elevate = false; }}
     oncancel={() => (elevate = false)}
   >

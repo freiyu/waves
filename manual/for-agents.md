@@ -25,6 +25,9 @@ files, the database, tokens, or `.claude/settings.local.json` and `.mcp.json`: t
 3. If `valid` is false, fix every item in `errors` (each has a JSON pointer in `path`) and submit again. A valid proposal
    becomes a draft. The human reviews and approves it; you do not.
 
+Aim for task titles of 60 characters or fewer that name the work (up to 160 is accepted); a long title is cut after
+two lines on the task card.
+
 Write validator commands the human can read and trust: they are shown for approval and run later with `/bin/sh -c`.
 
 ## Work: one task at a time
@@ -50,8 +53,8 @@ Write validator commands the human can read and trust: they are shown for approv
 - Work only on the task you hold. Without a lease, the guard may deny your file edits. Under the `enforce` policy it
   also denies edits outside the task's workspace and to `.git`, the Claude settings and `.mcp.json`. A `read_only`
   task must not write files.
-- If `waves_heartbeat` shows a cancel request, or any call tells you that your lease is not valid, stop and call
-  `waves_release_task` if you can. A lease ends when the human cancels the work, or approves a new workflow version
+- If `waves_heartbeat` shows a cancel request, stop and call `waves_release_task`. If any call tells you that your
+  lease is not valid, stop working on the task: there is nothing left to release. A lease ends when the human cancels the work, or approves a new workflow version
   while you work (your task is then cancelled and is not rerun).
 - If your session loses its connection to Waves, the execution is marked Disconnected at once and the lease ends after
   30 seconds unless the connection comes back. The task is then blocked for the human. **Waves never reruns an

@@ -1,17 +1,6 @@
-import { app } from './app.svelte';
-import { resource } from './resource.svelte';
-import type { WaitingItem } from '../api/ext';
-
 /** Execution id to the time its harness started waiting for the human, from executions the page already holds. */
 export const waitingOf = (items: Array<{ id: string; waiting_since?: string | null }>) =>
   new Map(items.filter((x) => x.waiting_since).map((x) => [x.id, x.waiting_since!] as [string, string]));
-
-/** Running executions whose harness said its turn ended and waits for the human (waiting_since on the execution). A failure is
- *  not turned into an empty list: `error` is set and the page says so. */
-export function waitingResource() {
-  const a = app();
-  return resource<WaitingItem[]>(async () => [...waitingOf((await a.api.executions()).items)].map(([execution_id, since]) => ({ execution_id, since })), ['execution.changed']);
-}
 
 /** Minutes since an ISO time, at least 1. */
 export const minutesSince = (iso: string, now = Date.now()) => Math.max(1, Math.round((now - Date.parse(iso)) / 60_000));

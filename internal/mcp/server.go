@@ -21,6 +21,10 @@ import (
 // MaxBody is the request limit on /mcp (proposals may be up to 1 MiB of JSON inside a request).
 const MaxBody = 4 << 20
 
+// sessionLimit is how many session bindings are kept before the closed ones are dropped. A variable only so tests can lower
+// it; there is no flag or environment variable for it.
+var sessionLimit = 4096
+
 // Tools are the tool names, in the order they are listed.
 var Tools = []string{
 	"waves_get_planning_request", "waves_submit_workflow_proposal", "waves_list_available_tasks", "waves_claim_task",
@@ -31,9 +35,11 @@ var Tools = []string{
 type server struct {
 	core *core.Service
 	srv  *sdk.Server
-	// sessions binds each MCP session to the credential that opened it.
+	// sessions binds each MCP session to the credential that opened it. pruneAt is the size at which closed ones are next
+	// looked for, so that many live sessions do not make every new one scan them all.
 	mu       sync.Mutex
 	sessions map[string]string
+	pruneAt  int
 }
 
 // Handler returns the /mcp handler. Every request must carry a project MCP
@@ -71,6 +77,13 @@ func Handler(c *core.Service) http.Handler {
 			w.Write([]byte(`{"error":{"code":"unauthenticated","message":"MCP needs the project credential.","next_step":"Run waves agent connect claude-code."}}`))
 			return
 		}
+		// A session answers only to the credential that opened it, for every method: the SDK on its own would let any valid
+		// credential that names it send to it, take its stream, or close it. The answer is the SDK's own for an unknown id.
+		if sid := r.Header.Get("Mcp-Session-Id"); sid != "" && s.foreign(sid, p.CredID) {
+			c.AuditRejected(r.Context(), p, "mcp session of another credential")
+			http.Error(w, "session not found", http.StatusNotFound)
+			return
+		}
 		// The stream the bridge keeps open (GET) tells Waves the session is connected for as long as it lasts, even while one tool
 		// call runs for minutes and nothing else is said. The session must belong to this credential.
 		// Only a session the SDK still holds counts: for a closed or unknown one the SDK answers 404, and a stream that is refused
@@ -92,31 +105,81 @@ func Handler(c *core.Service) http.Handler {
 				}()
 			}
 		}
-		h.ServeHTTP(w, r)
-		// The session that an initialize request just opened belongs to the credential that opened it: a stream may only be
-		// attached by that credential, so no other credential can claim an unbound session id first.
+		// The session that an initialize request opens belongs to the credential that opened it: a stream may only be
+		// attached by that credential, so no other credential can claim an unbound session id first. It is bound before the
+		// first byte of the answer leaves, because the client may open its stream while this request is still being served.
 		if r.Method == http.MethodPost && r.Header.Get("Mcp-Session-Id") == "" {
-			if sid := w.Header().Get("Mcp-Session-Id"); sid != "" {
-				s.bind(sid, p.CredID)
-			}
+			b := &binder{ResponseWriter: w, server: s, cred: p.CredID}
+			defer b.bindSession() // an answer without a body: its headers leave after the handler returns
+			w = b
 		}
+		h.ServeHTTP(w, r)
 	})
 }
+
+// binder binds the session named in the response headers to the credential just before anything is sent.
+type binder struct {
+	http.ResponseWriter
+	server *server
+	cred   string
+}
+
+func (b *binder) bindSession() {
+	if sid := b.Header().Get("Mcp-Session-Id"); sid != "" {
+		b.server.bind(sid, b.cred)
+	}
+}
+
+func (b *binder) WriteHeader(status int) {
+	b.bindSession()
+	b.ResponseWriter.WriteHeader(status)
+}
+
+func (b *binder) Write(p []byte) (int, error) {
+	b.bindSession()
+	return b.ResponseWriter.Write(p)
+}
+
+func (b *binder) Flush() { _ = b.FlushError() }
+
+// FlushError is what http.ResponseController calls: a flush alone also sends the headers.
+func (b *binder) FlushError() error {
+	b.bindSession()
+	return http.NewResponseController(b.ResponseWriter).Flush()
+}
+
+// Unwrap lets http.ResponseController reach the deadlines of the real writer.
+func (b *binder) Unwrap() http.ResponseWriter { return b.ResponseWriter }
 
 // bind ties an MCP session to the credential that uses it and reports whether it is this one's. Session ids are assigned by
 // the service and random, so a credential that does not hold the session cannot name it.
 func (s *server) bind(sid, cred string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if prev, ok := s.sessions[sid]; ok && prev != cred {
-		return false
+	prev, known := s.sessions[sid]
+	if known {
+		return prev == cred
 	}
-	// shortcut: the map is reset when it gets large instead of following SDK session ends (same as in caller); a reset only forgets bindings.
-	if len(s.sessions) > 4096 {
-		clear(s.sessions)
+	if len(s.sessions) >= max(sessionLimit, s.pruneAt) {
+		s.dropClosed()
+		s.pruneAt = 2 * len(s.sessions)
 	}
 	s.sessions[sid] = cred
 	return true
+}
+
+// dropClosed forgets the bindings of sessions the SDK no longer holds. A live session is never forgotten: without its
+// binding another credential could claim it. The caller holds s.mu (the SDK never calls in while it holds its own lock).
+func (s *server) dropClosed() {
+	open := map[string]bool{}
+	for ss := range s.srv.Sessions() {
+		open[ss.ID()] = true
+	}
+	for sid := range s.sessions {
+		if !open[sid] {
+			delete(s.sessions, sid)
+		}
+	}
 }
 
 // owns reports whether the session was opened by this credential.
@@ -124,6 +187,14 @@ func (s *server) owns(sid, cred string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.sessions[sid] == cred
+}
+
+// foreign reports whether the session is bound to a different credential. It binds nothing.
+func (s *server) foreign(sid, cred string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prev, ok := s.sessions[sid]
+	return ok && prev != cred
 }
 
 // live reports whether the SDK holds a session with this id.
@@ -160,16 +231,9 @@ func (s *server) caller(ctx context.Context, req *sdk.CallToolRequest) (core.Pri
 	if req.Session != nil {
 		sid = req.Session.ID()
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if prev, ok := s.sessions[sid]; ok && prev != p.CredID {
+	if !s.bind(sid, p.CredID) {
 		return p, "", &core.Error{Code: "lease_invalid", Message: "This MCP session belongs to another credential."}
 	}
-	// shortcut: the map is reset when it gets large instead of following SDK session ends; ids are random server-assigned, so a reset only forgets bindings.
-	if len(s.sessions) > 4096 {
-		clear(s.sessions)
-	}
-	s.sessions[sid] = p.CredID
 	return p, sid, nil
 }
 

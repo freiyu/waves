@@ -38,7 +38,7 @@
       <div class="pb stack">
         <div>{#if g.installed}<b>Policy: {g.policy}.</b> {g.would_deny_24h} would-deny in the last 24 hours.{:else}<b>Not installed.</b> Nothing is guarding this project yet.{/if}</div>
         <Note kind="neu" icon="warn"><b>What this does not defend.</b> {g.not_defended}</Note>
-        <div><a class="tlink" href={href('/harnesses')}>Harnesses</a></div>
+        <div><a href={href('/harnesses')}>Harnesses</a></div>
       </div>
     </Panel>
   {/snippet}
@@ -65,6 +65,7 @@
     kicker="Changing this needs your passphrase"
     facts={[{ label: 'Project', value: proj.data?.name ?? '' }, { label: 'File', value: plan.data?.file ?? '', mono: true }]}
     confirm="Connect"
+    done="Connected"
     needPassphrase={!a.elevationFor()}
     onconfirm={async (p) => {
       await a.runElevated(p, (secret) => a.api.connect(pid, plan.data!.plan_hash, secret));

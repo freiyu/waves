@@ -32,7 +32,7 @@
       {#if d.will_cancel?.length}
         <details class="disc" open><summary>Work this cancels <span class="count">{d.will_cancel.length}</span></summary><div class="pb">
           <div class="mb-2">Approving replaces the approved version at once. Cancelled tasks are not rerun automatically.</div>
-          <ul class="list-disc pl-5">{#each d.will_cancel as w (w.task_code)}<li><b>{w.task_code}</b>{#if w.title} {visible(w.title)}{/if}{#if w.execution_id} · running as <span class="mono">{w.execution_id}</span>{/if}</li>{/each}</ul>
+          <ul class="list-disc pl-5">{#each d.will_cancel as w (w.task_code)}<li><b>{w.task_code}</b>{#if w.title}{' '}{visible(w.title)}{/if}{#if w.execution_id}{' '}· running as <span class="mono">{w.execution_id}</span>{/if}</li>{/each}</ul>
         </div></details>
       {/if}
       {#if commands && d.commands.length}
@@ -42,7 +42,8 @@
         {#if d.state !== 'pending'}
           <Note kind={d.state === 'approved' ? 'ok' : 'dng'}>Decided: <b>{label(d.state)}</b>{d.decided_at ? ' ' + ago(d.decided_at) : ''}.</Note>
         {:else}
-          <DecisionBox approval={d} ondecided={() => { void res.reload(); ondecided?.(); }} />
+          <!-- If what is approved changes, an open confirmation is closed rather than changed under the human. -->
+          {#key d.id + d.subject_hash}<DecisionBox approval={d} ondecided={() => { void res.reload(); ondecided?.(); }} />{/key}
         {/if}
       </div>
     </section>

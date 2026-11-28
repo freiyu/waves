@@ -5,7 +5,7 @@
   import { app } from './app.svelte';
   import type { ApprovalDetail } from '../api/models';
   import { shellData } from './shell';
-  import { toast } from 'svelte-sonner';
+  import { sendDecision } from './decide';
   import Btn from './Btn.svelte';
   import StepUpDialog from './StepUpDialog.svelte';
 
@@ -37,28 +37,7 @@
   ]);
 
   async function confirm(pass: string) {
-    const reject = mode === 'reject';
-    const usedPassphrase = needPass; // read before the dialog state is reset
-    let secret = a.elevationFor(approval);
-    if (!secret && (needPass)) {
-      await a.stepUp(pass, approval.id);
-      secret = a.elevationFor(approval);
-    }
-    let res;
-    try {
-      res = await a.api.decide(
-        approval.id,
-        reject
-          ? { decision: 'reject', subject_hash: approval.subject_hash, feedback: feedback.trim() }
-          : { decision: 'approve', subject_hash: approval.subject_hash, override_reason: overrideRequired ? override.trim() : undefined },
-        secret,
-      );
-    } finally {
-      // A single-use confirmation covers one attempt, whether it worked or failed (for example on a changed subject).
-      if (a.state.elevation?.kind === 'single_use') a.dropElevation();
-    }
-    const verdict = res.state === 'approved' ? 'approved' : res.state === 'rejected' ? 'rejected' : null;
-    toast.success(verdict === 'approved' ? 'Approval recorded' : verdict === 'rejected' ? 'Rejection recorded' : 'Decision recorded', { description: `${approval.category_label}: ${approval.subject}${verdict ? ` was ${verdict}` : ''}${usedPassphrase ? ' with your passphrase' : ''}.` });
+    const res = await sendDecision(a, approval, { mode: mode!, passphrase: pass, needPass, feedback, override: overrideRequired ? override : undefined });
     mode = null;
     override = feedback = '';
     ondecided(res);
@@ -75,7 +54,7 @@
     {/if}
     <div class="row wrap">
       <Btn kind="pri" lock disabled={blocked || !canApprove || (overrideRequired && !override.trim())} onclick={() => (mode = 'approve')}>Approve</Btn>
-      <Btn lock={gate && !covered} disabled={blocked || !approval.allowed_decisions.includes('reject')} onclick={() => (mode = 'reject')}>Reject with feedback</Btn>
+      <Btn kind="dng" lock={gate && !covered} disabled={blocked || !approval.allowed_decisions.includes('reject')} onclick={() => (mode = 'reject')}>Reject with feedback</Btn>
     </div>
     <div class="muted">
       {#if blocked}Approvals are blocked until the audit chain break is acknowledged on the Activity page.
@@ -91,6 +70,7 @@
     kicker={needPass ? 'Approval requires your passphrase' : 'Confirm your decision'}
     {facts}
     confirm={mode === 'approve' ? 'Approve' : 'Reject'}
+    done={mode === 'approve' ? 'Approved' : 'Rejected'}
     danger={mode === 'reject'}
     needPassphrase={needPass}
     nopass={covered ? undefined : 'No passphrase is needed to reject this item.'}

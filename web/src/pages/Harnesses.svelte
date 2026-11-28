@@ -23,13 +23,29 @@
   let chosen = $state<string | undefined>();
   const proj = $derived(projects.data?.items.find((p) => p.id === chosen) ?? projects.data?.items.find((p) => p.active) ?? projects.data?.items[0]);
   const pid = $derived(proj?.id);
+  // The page stays on the project it first showed: which one is active can change from outside while the human reads or types.
+  $effect(() => {
+    if (pid && chosen !== pid) chosen = pid;
+  });
   const harnesses = resource(() => a.api.harnesses(), ['harness.changed']);
-  const guard = resource(async () => (pid ? a.api.guard(pid) : null), ['harness.changed', 'guard.denial']);
-  const decisions = resource(async () => (pid ? a.api.guardDecisions(pid) : null), ['guard.denial', 'harness.changed']);
+  const guard = resource(async () => {
+    const id = pid;
+    return id ? { ...(await a.api.guard(id)), project: id } : null;
+  }, ['harness.changed', 'guard.denial']);
+  const decisions = resource(async () => {
+    const id = pid;
+    return id ? { ...(await a.api.guardDecisions(id)), project: id } : null;
+  }, ['guard.denial', 'harness.changed']);
+  // Only what was read for the project on screen is shown.
+  const own = $derived(decisions.data?.project === pid ? decisions.data : undefined);
 
   let tab = $state('guard');
-  type Dlg = null | 'policy' | 'unmanaged' | 'disconnect';
-  let dlg = $state<Dlg>(null);
+  // A dialog holds the project it was opened for, names it, and changes that one only.
+  type Kind = 'policy' | 'unmanaged' | 'disconnect';
+  let dlg = $state<null | { kind: Kind; id: string; name: string }>(null);
+  const ask = (kind: Kind) => {
+    if (proj) dlg = { kind, id: proj.id, name: proj.name };
+  };
   let policy = $state<'off' | 'audit' | 'enforce'>('audit');
   let unmanaged = $state<'allow' | 'deny'>('allow');
 
@@ -44,7 +60,7 @@
     : policy === 'audit' ? 'It records what enforce would deny. It blocks nothing.'
     : unmanagedSessions === 'allow'
       ? "It denies file edits outside a session's lease, and file edits and Bash from a session whose lease ended. A claude session that never claimed a task is allowed and logged as a guard decision. Bash from a session with an active lease is not checked."
-      : "It denies file edits outside a session's lease, and file edits and Bash from a session that never claimed a task. Bash from a session with an active lease is not checked.";
+      : "It denies file edits outside a session's lease, and file edits and Bash from a session whose lease ended or that never claimed a task. Bash from a session with an active lease is not checked.";
   const capCols: Column<Harness['capabilities'][number]>[] = [
     { key: 'name', label: 'Capability', text: (r) => r.name, mono: true },
     { key: 'val', label: 'Claude Code', cell: capv },
@@ -60,7 +76,7 @@
   const openPolicy = (g: { policy: typeof policy; unmanaged_sessions: typeof unmanaged }) => {
     policy = g.policy;
     unmanaged = g.unmanaged_sessions;
-    dlg = 'policy';
+    ask('policy');
   };
 </script>
 
@@ -85,17 +101,18 @@
           <Badge state={hn.available_for_execution ? 'connected' : 'not_connected'} text={hn.available_for_execution ? 'Available for execution' : 'Not available for execution'} />
           <span class="sp"></span>
           {#if proj}
-            {#if connected}<Btn lock onclick={() => (dlg = 'disconnect')}>Disconnect</Btn>{:else}<Btn kind="pri" href={href('/harnesses/connect/' + proj.id)}>Connect to {proj.name}</Btn>{/if}
+            {#if connected}<Btn lock onclick={() => ask('disconnect')}>Disconnect</Btn>{:else}<Btn kind="pri" href={href('/harnesses/connect/' + proj.id)}>Connect to {proj.name}</Btn>{/if}
           {/if}
         </div>
       </Panel>
-      <Tabs label="Harness details" bind:active={tab} tabs={[{ id: 'guard', label: 'Guard' }, { id: 'capabilities', label: 'Capabilities', count: hn.capabilities.length }, { id: 'decisions', label: 'Decisions', count: decisions.data?.items.length }]}>
+      <Tabs label="Harness details" bind:active={tab} tabs={[{ id: 'guard', label: 'Guard' }, { id: 'capabilities', label: 'Capabilities', count: hn.capabilities.length }, { id: 'decisions', label: 'Decisions', count: own?.items.length }]}>
         {#snippet children(t)}
           <div class="stack-lg pt-4">
             {#if t === 'guard'}
       <View res={guard} label="the guard policy">
         {#snippet children(g)}
-          {#if g}
+          {#if g && g.project !== pid}<p class="muted" role="status">Reading the guard policy of {proj?.name}…</p>
+          {:else if g}
             {#if g.drift}
               <Note kind="dng" role="alert"><b>The guard is not active here.</b> {g.drift}. The hook is not what Waves installed. Fix the file, then set the policy again to write the hook back.</Note>
             {/if}
@@ -120,13 +137,13 @@
           {/if}
         {/snippet}
       </View>
-    {#if guard.data}
+    {#if guard.data && guard.data.project === pid}
       <Panel title="Unmanaged sessions">
         <div class="pb row wrap">
           {#if guard.data.policy === 'enforce'}
             <span>A <span class="mono">claude</span> session that never claimed a task is currently: <b>{guard.data.unmanaged_sessions === 'allow' ? 'allowed and logged' : 'denied'}</b>.</span>
             <span class="sp"></span><span class="muted">Changing this needs your passphrase.</span>
-            <Btn sm lock onclick={() => { unmanaged = guard.data!.unmanaged_sessions; policy = guard.data!.policy; dlg = 'unmanaged'; }}>Change</Btn>
+            <Btn sm lock onclick={() => { unmanaged = guard.data!.unmanaged_sessions; policy = guard.data!.policy; ask('unmanaged'); }}>Change</Btn>
           {:else}
             <span class="muted">While the policy is {guard.data.policy} nothing is blocked, whatever this setting says.</span>
           {/if}
@@ -138,8 +155,8 @@
             {:else}
     <View res={decisions} label="guard decisions">
       {#snippet children(d)}
-        <Panel title="Recent guard decisions · {guard.data?.would_deny_24h ?? 0} would-deny in 24 h">
-          <Table label="Guard decisions" rows={d?.items ?? []} columns={decCols} rowKey={(r) => r.at + r.tool + r.target} initialSort={{ key: 'at', dir: 'desc' }}>
+        <Panel title="Recent guard decisions · {proj?.name}{guard.data?.project === pid ? ` · ${guard.data!.would_deny_24h} would-deny in 24 h` : ''}">
+          <Table label="Guard decisions" rows={d && d.project === pid ? d.items : []} columns={decCols} rowKey={(r) => r.at + r.tool + r.target} initialSort={{ key: 'at', dir: 'desc' }}>
             {#snippet empty()}No decisions recorded for this project yet.{/snippet}
           </Table>
         </Panel>
@@ -155,33 +172,36 @@
   {/snippet}
 </View>
 
-{#if dlg && pid}
+{#if dlg}
+  {@const d = dlg}
   <StepUpDialog
-    title={dlg === 'policy' ? 'Change the guard policy' : dlg === 'unmanaged' ? 'Unmanaged sessions' : 'Disconnect Claude Code'}
+    title={d.kind === 'policy' ? 'Change the guard policy' : d.kind === 'unmanaged' ? 'Unmanaged sessions' : 'Disconnect Claude Code'}
     kicker="Changing this needs your passphrase"
-    facts={dlg === 'disconnect' ? [{ label: 'Project', value: proj?.name ?? '' }, { label: 'Guard policy', value: 'becomes off' }] : []}
-    confirm={dlg === 'disconnect' ? 'Disconnect' : 'Save'}
-    danger={dlg === 'disconnect'}
+    facts={[{ label: 'Project', value: d.name }, ...(d.kind === 'disconnect' ? [{ label: 'Guard policy', value: 'becomes off' }] : [])]}
+    confirm={d.kind === 'disconnect' ? 'Disconnect' : 'Save'}
+    done={d.kind === 'disconnect' ? 'Disconnected' : 'Saved'}
+    danger={d.kind === 'disconnect'}
     needPassphrase={!a.elevationFor()}
     onconfirm={async (p) => {
+      const { kind, id } = d; // read before the first wait
       await a.runElevated(p, async (secret) => {
-        if (dlg === 'policy') await a.api.patchProjectSettings(pid, { guard_policy: policy }, secret);
-        else if (dlg === 'unmanaged') await a.api.patchProjectSettings(pid, { unmanaged_sessions: unmanaged }, secret);
-        else await a.api.disconnect(pid, secret);
+        if (kind === 'policy') await a.api.patchProjectSettings(id, { guard_policy: policy }, secret);
+        else if (kind === 'unmanaged') await a.api.patchProjectSettings(id, { unmanaged_sessions: unmanaged }, secret);
+        else await a.api.disconnect(id, secret);
       });
-      toast.success(dlg === 'policy' ? `Guard policy set to ${policy}` : dlg === 'unmanaged' ? `Unmanaged sessions: ${unmanaged === 'allow' ? 'allowed and logged' : 'denied'}` : 'Harness disconnected');
+      toast.success(kind === 'policy' ? `Guard policy set to ${policy}` : kind === 'unmanaged' ? `Unmanaged sessions: ${unmanaged === 'allow' ? 'allowed and logged' : 'denied'}` : 'Harness disconnected');
       dlg = null;
-      await Promise.all([guard.reload(), projects.reload(), harnesses.reload()]);
+      void Promise.all([guard.reload(), projects.reload(), harnesses.reload()]);
     }}
     oncancel={() => (dlg = null)}
   >
     {#snippet extra()}
-      {#if dlg === 'policy'}
+      {#if d.kind === 'policy'}
         <fieldset class="stack border-0 p-0"><legend class="lbl">Policy</legend>
           {#each POLICIES as p}<label class="row items-start"><input type="radio" bind:group={policy} value={p.id} /><span><b>{p.id}</b><br /><span class="muted">{p.text}</span></span></label>{/each}
         </fieldset>
         {#if policy === 'enforce'}<Note kind="warn"><b>enforce</b> blocks file edits outside a session's lease. A session that never claimed a task stays allowed unless you deny it under Unmanaged sessions. It is still not a sandbox; Bash from a session with an active lease is not checked.</Note>{/if}
-      {:else if dlg === 'unmanaged'}
+      {:else if d.kind === 'unmanaged'}
         <fieldset class="stack border-0 p-0"><legend class="lbl">A session that never claimed a task</legend>
           <label class="row"><input type="radio" bind:group={unmanaged} value="allow" /> Allow, audited</label>
           <label class="row"><input type="radio" bind:group={unmanaged} value="deny" /> Deny</label>

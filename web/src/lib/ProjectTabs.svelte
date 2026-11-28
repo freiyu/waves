@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  // Where the underline was on the previous project page. The bar is rebuilt on every page change,
+  // Where the highlight was on the previous project page. The bar is rebuilt on every page change,
   // so the next one starts there and slides to its own tab.
   let last: { x: number; w: number } | null = null;
 </script>
@@ -17,7 +17,11 @@
   let line = $state({ x: last?.x ?? 0, w: last?.w ?? 0, slide: last !== null });
   function measure() {
     const t = nav?.querySelector<HTMLElement>('[aria-current=page]');
-    if (t) { line.x = t.offsetLeft; line.w = t.offsetWidth; last = { x: line.x, w: line.w }; requestAnimationFrame(() => (line.slide = true)); }
+    if (t) {
+      line.x = t.offsetLeft; line.w = t.offsetWidth; last = { x: line.x, w: line.w }; requestAnimationFrame(() => (line.slide = true));
+      // On a narrow screen the bar scrolls: the current tab stays fully in view.
+      if (nav) nav.scrollLeft = Math.max(Math.min(nav.scrollLeft, line.x - 4), line.x + line.w + 4 - nav.clientWidth);
+    }
   }
   onMount(() => {
     void nav?.offsetWidth; // flush the starting position first, so the change below is animated
@@ -44,5 +48,5 @@
       <a class="ptab" href={href(t.to)}>{t.label}{#if t.n}<span class="n">{t.n}</span>{/if}</a>
     {/if}
   {/each}
-  <span class="tab-line pointer-events-none absolute bottom-0 left-0 h-0.5 w-px bg-primary" style="transform: translateX({line.x}px) scaleX({line.w}); {line.slide ? '' : 'transition: none'}" aria-hidden="true"></span>
+  <span class="tab-pill" style="width: {line.w}px; transform: translateX({line.x}px); {line.slide ? '' : 'transition: none'}" aria-hidden="true"></span>
 </nav>

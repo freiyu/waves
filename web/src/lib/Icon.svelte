@@ -1,12 +1,11 @@
 <script lang="ts" module>
   // Icons are imported one by one from lucide (tree-shaken). Status icons keep the design's meaning:
-  // play-circle, clock, check-circle, x-circle, triangle, dashed circle.
-  import CirclePlay from '@lucide/svelte/icons/circle-play';
+  // play, lock, check-circle, x-circle, triangle, open circle.
+  import Play from '@lucide/svelte/icons/play';
   import Clock from '@lucide/svelte/icons/clock-3';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import CircleX from '@lucide/svelte/icons/circle-x';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-  import CircleDashed from '@lucide/svelte/icons/circle-dashed';
   import Lock from '@lucide/svelte/icons/lock';
   import House from '@lucide/svelte/icons/house';
   import Folder from '@lucide/svelte/icons/folder';
@@ -34,21 +33,23 @@
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import User from '@lucide/svelte/icons/user';
   import LogOut from '@lucide/svelte/icons/log-out';
-  import SquareTerminal from '@lucide/svelte/icons/square-terminal';
+  import MessageSquare from '@lucide/svelte/icons/message-square';
   import GitFork from '@lucide/svelte/icons/git-fork';
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
-  import Workflow from '@lucide/svelte/icons/workflow';
-  import LayoutGrid from '@lucide/svelte/icons/layout-grid';
   import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
   import PanelRight from '@lucide/svelte/icons/panel-right';
+  import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
+  import Waypoints from '@lucide/svelte/icons/waypoints';
+  import Activity from '@lucide/svelte/icons/activity';
+  import TextAlign from '@lucide/svelte/icons/align-left';
 
   const ICONS = {
-    run: CirclePlay, wait: Clock, ok: CircleCheck, fail: CircleX, warn: TriangleAlert, neu: CircleDashed,
+    run: Play, wait: Clock, ok: CircleCheck, fail: CircleX, warn: TriangleAlert, neu: Circle,
     lock: Lock, home: House, folder: Folder, inbox: Inbox, exec: Terminal, plug: Plug, log: ScrollText,
     gear: Settings, dot: Circle, menu: Menu, search: Search, bell: Bell,
     chev: ChevronDown, chevu: ChevronUp, chevr: ChevronRight, chevl: ChevronLeft, more: Ellipsis, copy: Copy,
     plus: Plus, x: X, check: Check, sun: Sun, moon: Moon, monitor: Monitor, arrow: ArrowRight, user: User,
-    signout: LogOut, release: LogOut, prompt: SquareTerminal, fork: GitFork, retry: RotateCw, graph: Workflow, overview: LayoutGrid, updown: ChevronsUpDown, panelr: PanelRight,
+    signout: LogOut, release: LogOut, prompt: MessageSquare, fork: GitFork, retry: RotateCw, graph: Waypoints, pulse: Activity, lines: TextAlign, overview: LayoutDashboard, updown: ChevronsUpDown, panelr: PanelRight,
   };
   export type IconName = keyof typeof ICONS;
 </script>

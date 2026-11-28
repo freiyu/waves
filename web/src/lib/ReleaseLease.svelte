@@ -12,6 +12,7 @@
 <Confirm
   title="Release lease on task {target.code}?"
   confirm="Release"
+  kind="info"
   {oncancel}
   onconfirm={async () => {
     await a.api.interrupt(target.id);

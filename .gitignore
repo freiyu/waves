@@ -33,3 +33,6 @@ playwright-report/
 .idea/
 .vscode/
 .release-check/
+
+# Dev server cache, when Vite is started from the repository root
+.vite/

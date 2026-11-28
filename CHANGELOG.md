@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.2.1
+
+A new look for the dashboard, and fixes for problems found in 1.2.0.
+
+**Fixed (these were in 1.2.0)**
+- **A guard change on the Harnesses page could land on another project.** The dialogs for the guard policy, the
+  unmanaged-sessions setting and **Disconnect** followed the active project, which another client holding the operator token
+  can change while you type your passphrase, and two of them did not name a project. Each dialog now names its project and
+  changes only that one, and the page stays on the project it shows. If you changed these settings on that page and have more
+  than one project, check each one on the Harnesses page.
+- A connected agent could be shown **Disconnected** while it was quiet: a connection that opened very quickly was not counted.
+- A Claude Code session now answers only the project credential that opened it. Another project's credential that knows the
+  session id is refused, and the attempt is recorded in the audit log.
+- With very many sessions, Waves could forget which connections were still open. It now drops only closed ones.
+- A connection opened with a credential at the moment it is revoked no longer holds a lease.
+- A restore that was cut off no longer blocks the next one.
+- The dashboard showed **Reconnecting** again after it had said **Stale**. It stays **Stale** until it is connected, with a
+  notice on the page.
+
+**A new dashboard**
+- New light and dark colours and a rounded font. The fonts are inside the binary, nothing is loaded from the internet, and
+  their licences are served under `/licenses/`.
+- A narrow sidebar that opens with the page names when you point at it or reach it with the keyboard.
+- **Overview** shows what needs you as cards, the phases of each project, and what is running now. A project page shows its
+  phases and its tasks as cards of one size; a long task title is cut and shown whole when you point at it.
+- A phase review is decided on the page, next to what you are judging, and the approval of a finished phase names changes
+  outside the plan wherever you decide it. The **Plan** tab puts a waiting decision first.
+- **Executions** shows the last hour as a timeline.
+- **Graph**: it shows the tasks of every phase. Opening a phase makes room around it, projects and phases do not lie on each
+  other (the phase you bring close makes the other one step aside), and lines join the sides that face each other. A side
+  you picked by hand is dropped when two phases come to face each other differently.
+- Buttons are labelled and coloured by what they do. A wrong passphrase shakes the field, and an accepted decision is shown
+  on the screen with the word for it.
+
+**For agents**
+- The planning request now asks for task titles of 60 characters or fewer. Longer titles, up to 160, are still accepted.
+
+**Upgrading from 1.2.0 or 1.0.1**: run `waves update`. There is no database migration, projects that are connected keep
+working, and the 1.2.0 binary opens the same database again (`waves update --version 1.2.0 --force`). **From 1.0.0**: run
+`install.sh` again; the first start migrates the database after writing a backup.
+
+Requirements are unchanged: Linux or WSL2 on amd64 or arm64, `git`, Claude Code. No new runtime dependency.
+
 ## 1.2.0
 
 Claude Code keeps its task during a long build or test run, you approve once per phase instead of once per task, and a new

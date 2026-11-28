@@ -48,11 +48,16 @@ export function createEventsClient(o: EventsOptions) {
   let stopped = false;
   let retry: ReturnType<typeof setTimeout> | undefined;
   let staleTimer: ReturnType<typeof setTimeout> | undefined;
+  let stale = false;
 
   function markLost() {
     lost = true;
-    o.onState('reconnecting');
-    staleTimer ??= setTimeout(() => o.onState('stale'), staleAfter);
+    // Once stale, a refused retry does not make it merely "reconnecting" again.
+    if (!stale) o.onState('reconnecting');
+    staleTimer ??= setTimeout(() => {
+      stale = true;
+      o.onState('stale');
+    }, staleAfter);
   }
 
   function open() {
@@ -62,6 +67,7 @@ export function createEventsClient(o: EventsOptions) {
     s.onopen = () => {
       clearTimeout(staleTimer);
       staleTimer = undefined;
+      stale = false;
       attempt = 0;
       o.onState('live');
       // A brand new EventSource has no Last-Event-ID: whatever happened meanwhile is unknown.

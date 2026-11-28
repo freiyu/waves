@@ -30,3 +30,14 @@ export function diffLines(text: string): Array<{ kind: 'add' | 'del' | 'hdr' | '
     kind: /^(diff |index |--- |\+\+\+ |@@|new file|deleted file)/.test(text) ? 'hdr' : text.startsWith('+') ? 'add' : text.startsWith('-') ? 'del' : 'ctx',
   }));
 }
+
+const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+/** A small count as a word, for headlines and sentences; larger counts stay digits. */
+export const countWord = (n: number) => WORDS[n] ?? String(n);
+export const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** Seconds as "6m 12s", or "1h 04m" from an hour on. */
+export function shortDuration(s: number | null | undefined): string {
+  if (s == null) return '';
+  if (s >= 3600) return `${Math.floor(s / 3600)}h ${pad(Math.floor((s % 3600) / 60))}m`;
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${pad(s % 60)}s`;
+}

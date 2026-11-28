@@ -9,7 +9,7 @@
 
 <Tooltip.Provider delayDuration={300}>
   <Tooltip.Root>
-    <Tooltip.Trigger onclick={copy} aria-label="{label} {value}" class="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border border-line bg-surface text-fg-muted hover:bg-muted">
+    <Tooltip.Trigger onclick={copy} aria-label="{label} {value}" class="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border border-line-strong bg-surface text-fg-muted hover:bg-muted">
       <Icon name="copy" size={14} />
     </Tooltip.Trigger>
     <Tooltip.Portal>

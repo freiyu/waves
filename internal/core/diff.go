@@ -89,6 +89,10 @@ func diffStats(path string) (files, added, removed int, names []string) {
 
 // phaseDiff summarizes the stored diffs of a phase's executions and flags
 // changes in the workspace no execution of this phase accounts for.
+// notCompared marks the one finding that stands for "nothing was compared". Git never lists a file under .git as changed,
+// so the path cannot come from the comparison itself.
+func notCompared(f contract.Finding) bool { return f.Path == ".git/config" }
+
 func (s *Service) phaseDiff(ctx context.Context, phaseID string, tasks []contract.ReviewTask) (contract.DiffSummary, []contract.Finding) {
 	sum := contract.DiffSummary{}
 	findings := []contract.Finding{}

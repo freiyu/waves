@@ -7,7 +7,7 @@
 </script>
 
 <DropdownMenu.Root>
-  <DropdownMenu.Trigger aria-label={label} class="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-fg-muted hover:bg-muted"><Icon name="more" size={16} /></DropdownMenu.Trigger>
+  <DropdownMenu.Trigger aria-label={label} class="inline-flex size-11 cursor-pointer items-center justify-center rounded-xl text-fg-muted hover:bg-muted"><Icon name="more" size={16} /></DropdownMenu.Trigger>
   <DropdownMenu.Portal>
     <DropdownMenu.Content align="end" sideOffset={4} class={menuPop}>
       {#each items as it}<DropdownMenu.Item class={mi} onSelect={it.run}><Icon name={it.icon} class="text-fg-muted" />{it.label}</DropdownMenu.Item>{/each}

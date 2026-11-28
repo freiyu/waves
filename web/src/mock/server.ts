@@ -9,7 +9,7 @@ import { MockBus } from './bus';
 
 export interface MockOptions {
   now?: number;
-  /** URL scenario: empty, error, slow, chain_broken, reset, drift, first_run, signed_out, locked. */
+  /** URL scenario: empty, error, slow, chain_broken, reset, drift, first_run, signed_out, locked, stale, layout_flaky. */
   scenario?: string;
   latencyMs?: number;
   /** Milliseconds between log lines of the running execution, as a live agent would write them. 0 or absent: none. */
@@ -40,6 +40,10 @@ export function createMock(opts: MockOptions = {}) {
   if (scenario === 'reset') db.resetAlert = true;
   if (scenario === 'first_run') db.passphraseSet = false, (db.settings.passphrase_set = false);
   if (scenario === 'signed_out') db.signedIn = false;
+  let staleOnce = scenario === 'stale';
+  // A saved arrangement whose first read fails.
+  let layoutFails = scenario === 'layout_flaky';
+  if (layoutFails) db.layout = { nodes: { phs_b4: { x: 900, y: 150 } }, lines: {} };
   if (scenario === 'locked') db.lockedUntil = now() + 252_000;
   let counter = 0;
   const secret = (p: string) => `${p}_${(++counter).toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -62,7 +66,7 @@ export function createMock(opts: MockOptions = {}) {
     const items: AttentionItem[] = [];
     if (db.chainBroken) items.push({ kind: 'audit_chain', label: 'Audit chain broken', subject: 'Verification failed at record 1,212', since: iso(now() - 600_000), ref_type: 'audit', ref_id: 'chain' });
     if (db.resetAlert) items.push({ kind: 'passphrase_reset', label: 'Passphrase was reset', subject: 'Reset from a terminal without the old passphrase. If it was not you, treat approvals since then as untrusted.', since: iso(now() - 300_000), ref_type: 'audit', ref_id: 'reset' });
-    for (const a of db.approvals.values()) if (a.state === 'pending') items.push({ kind: 'approval', label: a.category_label, subject: a.subject, project_id: a.project_id, project_name: a.project_name, since: a.requested_at, ref_type: 'approval', ref_id: a.id });
+    for (const a of scenario === 'empty' ? [] : db.approvals.values()) if (a.state === 'pending') items.push({ kind: 'approval', label: a.category_label, subject: a.subject, project_id: a.project_id, project_name: a.project_name, since: a.requested_at, ref_type: 'approval', ref_id: a.id });
     for (const e of db.executions.values()) {
       if (e.state === 'failed' || e.state === 'disconnected')
         items.push({ kind: e.state === 'failed' ? 'execution_failed' : 'execution_disconnected', label: e.state === 'failed' ? 'Failed' : 'Disconnected', subject: `${e.id} ${e.task_title}`, project_id: e.project_id, project_name: e.project_name, since: e.history.at(-1)?.at ?? iso(now()), ref_type: 'execution', ref_id: e.id });
@@ -73,8 +77,10 @@ export function createMock(opts: MockOptions = {}) {
   function toSummary(e: ExecutionDetail) {
     const { harness_version, lease, workspace_path, workspace_locked, start_commit, usage, history, events, diff_files, recovery, queued_reason, error, result, ...s } = e;
     void [harness_version, lease, workspace_path, workspace_locked, start_commit, usage, history, events, diff_files, recovery, queued_reason, error, result];
-    return { ...s, waiting_since: waitingSince(e) };
+    return { ...s, ended_at: endedAt(e), waiting_since: waitingSince(e) };
   }
+  // As in the service: set once the execution stopped, finished or not.
+  const endedAt = (e: ExecutionDetail) => (['completed', 'failed', 'cancelled', 'interrupted', 'disconnected'].includes(e.state) ? e.history.filter((h) => h.state === e.state).at(-1)?.at : undefined);
   // The harness waits only while its execution runs, as in the service.
   const waitingSince = (e: ExecutionDetail) => (e.state === 'running' ? db.waiting.get(e.id) : undefined);
   const toApprovalSummary = (a: ApprovalDetail) => {
@@ -190,7 +196,12 @@ export function createMock(opts: MockOptions = {}) {
     bus.emit('project.changed', { project_id: p.id });
     return ok(p, 201);
   });
-  r('GET /projects/{id}', (c) => { recount(); return ok(project(c.params.id!)); });
+  r('GET /projects/{id}', (c) => {
+    recount();
+    const d = project(c.params.id!);
+    const phase_tasks = d.phases.flatMap((p) => (p.id === d.tasks_phase ? d.tasks : db.otherTasks.get(p.id) ?? []).map((t) => ({ ...t, phase_id: p.id })));
+    return ok({ ...d, phase_tasks });
+  });
   r('PATCH /projects/{id}', (c) => {
     const p = db.projects.find((x) => x.id === c.params.id);
     if (!p) throw fail(404, 'not_found', 'No such project.', 'Open the Projects list.');
@@ -206,7 +217,13 @@ export function createMock(opts: MockOptions = {}) {
     bus.emit('project.changed', { project_id: p.id });
     return ok(p);
   });
-  r('GET /graph-layout', () => ok(db.layout));
+  r('GET /graph-layout', () => {
+    if (layoutFails) {
+      layoutFails = false;
+      throw fail(500, 'internal', 'The arrangement could not be read.');
+    }
+    return ok(db.layout);
+  });
   r('PUT /graph-layout', (c) => {
     const l = c.body as GraphLayout | undefined;
     const sides = ['top', 'right', 'bottom', 'left'];
@@ -265,7 +282,7 @@ export function createMock(opts: MockOptions = {}) {
     const v = db.versions.get(c.params.id!);
     if (!v) throw fail(404, 'not_found', 'No such workflow version.');
     if (v.state === 'draft') throw fail(409, 'invalid_state', 'This version is already a draft.', 'Edit it or submit it.');
-    const next = { ...structuredClone(v), id: secret('wfv'), number: v.number + 1, state: 'draft' as const, created_at: iso(now()) };
+    const next = { ...structuredClone(v), id: secret('wfv'), number: 1 + Math.max(...db.workflows.get(v.project_id)!.versions.map((x) => x.number)), state: 'draft' as const, created_at: iso(now()) };
     db.versions.set(next.id, next);
     db.workflows.get(v.project_id)!.versions.unshift({ id: next.id, number: next.number, state: 'draft', content_hash: next.content_hash, created_at: next.created_at });
     bus.emit('workflow.changed', { project_id: v.project_id, version_id: next.id, state: 'draft' });
@@ -331,6 +348,7 @@ export function createMock(opts: MockOptions = {}) {
     const rev = a.phase_id ? db.reviews.get(a.phase_id) : undefined;
     if (b.decision === 'approve') {
       const el = requireElevation(c, a.id, a.step_up === 'every_time' ? ['single_use'] : ['single_use', 'window']);
+      if (staleOnce) { staleOnce = false; a.subject_hash += '_changed'; }
       if (b.subject_hash !== a.subject_hash) throw fail(409, 'stale_subject', 'What you are approving changed after you opened it.', 'Reload the approval and review it again.');
       if (rev?.requires_override_reason && !String(b.override_reason ?? '').trim()) throw fail(422, 'validation_failed', 'A failed validator needs a written reason to approve.', 'Write the override reason.');
       if (el.kind === 'single_use') c.db.elevations.delete(c.headers['x-waves-elevation']!);
@@ -378,7 +396,7 @@ export function createMock(opts: MockOptions = {}) {
     if (pid) list = list.filter((e) => e.project_id === pid);
     return ok({ items: list.map(toSummary) });
   });
-  r('GET /executions/{id}', (c) => { const e = exec(c.params.id!); return ok({ ...e, waiting_since: waitingSince(e) }); });
+  r('GET /executions/{id}', (c) => { const e = exec(c.params.id!); return ok({ ...e, ended_at: endedAt(e), waiting_since: waitingSince(e) }); });
   r('GET /executions/{id}/log', (c) => {
     const bytes = new TextEncoder().encode(db.logs.get(exec(c.params.id!).id) ?? '');
     return { status: 200, text: new TextDecoder().decode(bytes.slice(Number(c.query.get('offset') ?? 0))) };
@@ -441,6 +459,7 @@ export function createMock(opts: MockOptions = {}) {
     p.guard_policy = g.policy;
     d.guard_policy = g.policy;
     d.harness = { name: 'Claude Code', version: '2.1.318', connected: true, guard_policy: g.policy, would_deny_24h: 0, credential_active: true };
+    for (const h of db.harnesses) h.connected_projects = [...new Set([...h.connected_projects, d.name])];
     bus.emit('harness.changed', { harness_id: 'hrn_claude', project_id: d.id });
     return ok({ ...plan, applied: true });
   });
@@ -473,6 +492,7 @@ export function createMock(opts: MockOptions = {}) {
     p.guard_policy = 'off';
     d.guard_policy = 'off';
     d.harness = undefined;
+    for (const h of db.harnesses) h.connected_projects = h.connected_projects.filter((n) => n !== d.name);
     bus.emit('harness.changed', { harness_id: 'hrn_claude', project_id: d.id });
     return ok({ plan_hash: 'ph_removed', file: `${d.path}/.claude/settings.local.json`, lines: ['-  "mcpServers": { "waves": … }', '-  "hooks": { "PreToolUse": [ … ] }'], applied: true });
   });
@@ -513,7 +533,7 @@ export function createMock(opts: MockOptions = {}) {
   // Live agent: one more log line now and then, announced over the event stream.
   let tickTimer: ReturnType<typeof setInterval> | undefined;
   if (opts.tickMs) {
-    const lines = ['tool     Read src/checkout/receipt.ts', 'heartbeat ok, next due in 15 s', 'tool     Edit src/checkout/persist.ts (+6 -2)', 'progress Persistence covers the cold start path'];
+    const lines = ['tool     Read src/checkout/receipt.ts', 'tool     Bash npm test -- --run src/checkout', 'tool     Edit src/checkout/persist.ts (+6 -2)', 'progress Persistence covers the cold start path'];
     let n = 0;
     tickTimer = setInterval(() => {
       const e = db.executions.get('exe_a07e52');

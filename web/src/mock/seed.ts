@@ -23,7 +23,8 @@ export interface MockDb {
   failures: number;
   lockedUntil: number;
   projects: Project[];
-  details: Map<string, ProjectDetail>;
+  details: Map<string, Omit<ProjectDetail, 'phase_tasks'>>;
+  otherTasks: Map<string, ProjectDetail['tasks']>;
   requirements: Map<string, Requirement[]>;
   workflows: Map<string, S['ContractWorkflowInfo']>;
   versions: Map<string, WorkflowVersion>;
@@ -84,7 +85,7 @@ export function seed(now = Date.now()): MockDb {
     subject: 'P1 Content audit', requested_by: 'Waves', requested_at: at(12), action: 'Mark phase P1 as completed',
     facts: [
       { label: 'Phase', value: 'P1 Content audit' }, { label: 'Workflow', value: 'docs-site v1 (approved)' },
-      { label: 'Validators', value: '1 of 3 failed: build site (exit 2)' }, { label: 'Package hash', value: 'a41c…7e09', mono: true },
+      { label: 'Validators', value: '1 of 3 failed: build site (exit 2)' }, { label: 'Outside the plan', value: '2 changes no task accounts for. Read them in the phase review.' }, { label: 'Package hash', value: 'a41c…7e09', mono: true },
     ],
     impact: 'P1 becomes Completed. P2 can then be submitted for its own approval. Nothing is merged.',
     commands: ['make linkcheck', 'make build'], subject_hash: 'sh_d1_a41c7e09', allowed_decisions: ['approve', 'reject'], step_up: 'every_time', reject_needs_stepup: true, phase_id: 'phs_d1',
@@ -128,7 +129,7 @@ export function seed(now = Date.now()): MockDb {
     usage: { tokens_in: 41220, tokens_out: 6904, cost_usd: 0.31 },
     history: [{ at: at(7.05), state: 'queued' }, { at: at(7.03), state: 'starting' }, { at: at(7), state: 'running' }],
     events: [
-      { at: at(7), kind: 'claim', message: 'Lease lse_5c1e granted (ttl 90 s)' }, { at: at(5), kind: 'progress', message: 'Reading checkout state module' },
+      { at: at(7), kind: 'claim', message: 'Lease lse_5c1e granted' }, { at: at(5), kind: 'progress', message: 'Reading checkout state module' },
       { at: at(1), kind: 'progress', message: 'Selected method now persisted between app launches' },
     ],
   }));
@@ -136,10 +137,10 @@ export function seed(now = Date.now()): MockDb {
     id: 'exe_8f3a1c', task_id: 'tsk_b2t3', task_code: 'p2-t3', task_title: 'Add idempotency keys to POST /charges', project_id: 'prj_billing', project_name: 'billing-api',
     state: 'disconnected', started_at: at(21), duration_s: 1122, workspace_path: '~/work/billing-api', workspace_locked: true, start_commit: '2e7c0d1', diff_files: 6,
     history: [{ at: at(21), state: 'queued' }, { at: at(21), state: 'running' }, { at: at(3), state: 'disconnected', detail: 'session left' }, { at: at(0), state: 'blocked', detail: 'recovery required' }],
-    events: [{ at: at(4), kind: 'heartbeat', message: 'Last heartbeat' }, { at: at(3), kind: 'state', message: 'Marked Disconnected after 3 missed heartbeats' }],
+    events: [{ at: at(4), kind: 'progress', message: 'Writing the charge handler' }, { at: at(3), kind: 'state', message: 'Marked Disconnected: the session left' }],
     recovery: {
       partial_files: 6, partial_added: 188, partial_removed: 21, log_lines: 184, last_log_at: at(4), orphan: { count: 1, command: 'go test ./...' },
-      resume_session: '4b0f…c71a', reason: 'Heartbeats stopped and the service saw the session end. Waves did not rerun the task.',
+      resume_session: '4b0f…c71a', reason: 'The service saw the session end. Waves did not rerun the task.',
       timeline: [
         { at: at(21), state: 'running', detail: 'Claimed, lease granted' }, { at: at(4), state: 'running', detail: 'Last guard call' },
         { at: at(3), state: 'disconnected', detail: 'Marked Disconnected' }, { at: at(0), state: 'blocked', detail: 'Task blocked: recovery required' },
@@ -177,13 +178,12 @@ export function seed(now = Date.now()): MockDb {
 
   const logs = new Map<string, string>();
   logs.set('exe_a07e52', [
-    '11:42:03 claim    m3-t3 granted lease lse_5c1e (ttl 90 s)',
+    '11:42:03 claim    m3-t3 granted lease lse_5c1e',
     '11:42:05 tool     Read src/checkout/state.ts',
     '11:43:19 tool     Edit src/checkout/state.ts (+31 -9)',
     '11:44:40 tool     Bash npm test -- --run src/checkout',
     '11:44:52 ok       src/checkout/state.test.ts  14 passed',
     '11:46:10 tool     Edit src/checkout/persist.ts (+58 -0)',
-    '11:48:01 heartbeat ok, next due in 15 s',
     '11:48:16 progress Selected method now persisted between app launches',
     '',
   ].join('\n'));
@@ -277,7 +277,19 @@ export function seed(now = Date.now()): MockDb {
   });
 
   // ---- project details ----
-  const details = new Map<string, ProjectDetail>();
+  // The service sends phase_tasks (every phase); the mock builds it from these and the tasks of the listed phase.
+  const details = new Map<string, Omit<ProjectDetail, 'phase_tasks'>>();
+  const otherTasks = new Map<string, ProjectDetail['tasks']>();
+  const filled = (phase: string, code: string, state: 'done' | 'backlog', titles: string[]) =>
+    otherTasks.set(phase, titles.map((title, i) => task(`tsk_${phase}_${i}`, `${code}-t${i + 1}`, title, state, [])));
+  filled('phs_b1', 'p1', 'done', ['Model invoices', 'Draft the money schema', 'Review the schema']);
+  filled('phs_b3', 'p3', 'backlog', ['Charge endpoint', 'Refund endpoint', 'API documentation']);
+  filled('phs_b4', 'p4', 'backlog', ['Load test', 'Security pass']);
+  filled('phs_m1', 'm1', 'done', ['Create the app', 'Add navigation', 'Set up tests']);
+  filled('phs_m2', 'm2', 'done', ['Colour tokens', 'Buttons', 'Forms', 'Lists']);
+  filled('phs_m4', 'm4', 'backlog', ['Update store screenshots', 'Write release notes']);
+  filled('phs_d2', 'd2', 'backlog', ['Group the guides', 'Rename sections', 'Add redirects']);
+  filled('phs_r1', 'r1', 'done', ['Describe the refund', 'Plan the work']);
   const pendingOf = (pid: string) => [...approvals.values()].filter((a) => a.project_id === pid && a.state === 'pending');
   const harnessBrief = (policy: 'off' | 'audit' | 'enforce', deny: number) => ({ name: 'Claude Code', version: '2.1.318', connected: policy !== 'off', guard_policy: policy, would_deny_24h: deny, credential_active: policy !== 'off' });
   details.set('prj_billing', {
@@ -419,7 +431,7 @@ export function seed(now = Date.now()): MockDb {
   };
 
   return {
-    now, signedIn: true, passphraseSet: true, chainBroken: false, resetAlert: false, elevations: new Map(), failures: 0, lockedUntil: 0, projects, details, requirements, workflows, versions,
+    now, signedIn: true, passphraseSet: true, chainBroken: false, resetAlert: false, elevations: new Map(), failures: 0, lockedUntil: 0, projects, details, otherTasks, requirements, workflows, versions,
     reviews, approvals, executions, logs, diffs, contexts, harnesses, guard, guardDecisions, audit, settings, seq: 1284,
     waiting, layout: { nodes: {}, lines: {} },
   };

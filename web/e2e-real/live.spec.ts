@@ -16,7 +16,7 @@ test('the badges follow the service, and a retried task carries no old reason', 
   const h = { Authorization: `Bearer ${OP}` };
   await signIn(page);
   await page.goto('/#/executions');
-  const row = page.getByRole('row').filter({ hasText: IDS.live! });
+  const row = page.getByRole('list', { name: 'Timeline' }).getByRole('listitem').filter({ hasText: IDS.live! });
   await expect(row.locator('.badge').first()).toHaveText(/Running/);
 
   // The execution is cancelled behind the page's back: the badge changes without a reload.

@@ -85,6 +85,7 @@
         title={'Change ' + l.label.split(' (')[0]!.toLowerCase()}
         kicker="Changing this needs your passphrase"
         confirm="Save"
+        done="Saved"
         incomplete={!Number.isFinite(draft[l.key] ?? l.value)}
         needPassphrase={!a.elevationFor()}
         onconfirm={async (p) => {

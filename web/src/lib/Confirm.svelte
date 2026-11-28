@@ -5,7 +5,7 @@
   import { ApiError } from '../api/client';
   import Btn from './Btn.svelte';
   import Note from './Note.svelte';
-  let { title, confirm, danger = false, onconfirm, oncancel, children }: { title: string; confirm: string; danger?: boolean; onconfirm: () => Promise<void>; oncancel: () => void; children: Snippet } = $props();
+  let { title, confirm, kind = 'pri', onconfirm, oncancel, children }: { title: string; confirm: string; kind?: 'pri' | 'dng' | 'warn' | 'info'; onconfirm: () => Promise<void>; oncancel: () => void; children: Snippet } = $props();
   let busy = $state(false);
   let err = $state('');
   async function go(e: Event) {
@@ -26,6 +26,6 @@
   <form onsubmit={go}>
     <div class="mh"><h2 id="cf-title">{title}</h2></div>
     <div class="mb">{@render children()}{#if err}<Note kind="dng" icon="fail" role="alert">{err}</Note>{/if}</div>
-    <div class="mf"><Btn disabled={busy} onclick={oncancel}>Cancel</Btn><Btn type="submit" kind={danger ? 'dng' : 'pri'} disabled={busy}>{busy ? 'Working…' : confirm}</Btn></div>
+    <div class="mf"><Btn disabled={busy} onclick={oncancel}>Cancel</Btn><Btn type="submit" {kind} disabled={busy}>{busy ? 'Working…' : confirm}</Btn></div>
   </form>
 </Modal>

@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './fonts.css';
 @import './tokens.css';
 /* The older shared classes (panels, tables, notes, forms) live in the components layer so utilities still win. */
 @import './legacy.css' layer(components);
@@ -12,6 +13,11 @@
   --color-line-strong: var(--border-strong);
   --color-fg: var(--text);
   --color-fg-muted: var(--text-muted);
+  --color-fg-2: var(--text-2);
+  --color-divider: var(--divider);
+  --color-ghost: var(--ghost);
+  --color-queued: var(--queued);
+  --color-link: var(--link);
   --color-primary: var(--primary);
   --color-primary-fg: var(--primary-text);
   --color-focus: var(--focus);
@@ -29,12 +35,15 @@
   --color-st-neutral-soft: var(--status-neutral-soft);
   --color-st-waiting: var(--status-waiting);
   --color-st-waiting-soft: var(--status-waiting-soft);
+  --color-btn-dng: var(--btn-dng);
+  --color-btn-warn: var(--btn-warn);
+  --color-btn-warn-fg: var(--btn-warn-fg);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-canvas: var(--canvas);
   --color-canvas-dot: var(--canvas-dot);
   --color-scrim: var(--scrim);
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  --radius-card: 14px;
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+  --radius-card: 20px;
 }

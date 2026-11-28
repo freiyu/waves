@@ -56,9 +56,9 @@
             {#each ['retry_fresh', 'complete_partial', 'fail'] as d (d)}
               {@const c = COPY[d as D]}
               <div class="list-row">
-                <div><b>{c.title}</b><div class="muted small">{c.body}{#if c.cmd} <span class="mono">{c.cmd}</span>{/if}</div></div>
+                <div><b>{c.title}</b><div class="muted small">{c.body}{#if c.cmd}{' '}<span class="mono">{c.cmd}</span>{/if}</div></div>
                 <span class="sp"></span>
-                <Btn kind={d === 'retry_fresh' ? 'pri' : c.danger ? 'dng' : ''} onclick={() => (ask = d as D)}>{c.what}</Btn>
+                <Btn kind={d === 'retry_fresh' ? 'warn' : c.danger ? 'dng' : 'ok'} onclick={() => (ask = d as D)}>{c.what}</Btn>
               </div>
             {/each}
           </Panel>
@@ -66,12 +66,12 @@
         <Panel title="Timeline"><ul class="timeline">{#each [...r.timeline].reverse().filter((t, i, all) => i === 0 || t.state !== all[i - 1]!.state) as t}<li><span class="dot"></span><span class="t">{label(t.state)}</span><span class="mono muted small">{clock(t.at)}</span></li>{/each}</ul></Panel>
       </div>
       {#if ask === 'orphans'}
-        <Confirm title="Stop the leftover process?" confirm="Stop it" danger oncancel={() => (ask = null)} onconfirm={async () => { await a.api.stopOrphans(e.id); ask = null; toast.success(`Stop signal sent to ${r.orphan?.command ?? 'the process'}`); await res.reload(); }}>
+        <Confirm title="Stop the leftover process?" confirm="Stop it" kind="dng" oncancel={() => (ask = null)} onconfirm={async () => { await a.api.stopOrphans(e.id); ask = null; toast.success(`Stop signal sent to ${r.orphan?.command ?? 'the process'}`); await res.reload(); }}>
           <div>Waves sends a stop signal to <span class="mono">{r.orphan?.command}</span>. The action is recorded in the audit log.</div>
         </Confirm>
       {:else if ask}
-        <Confirm title={COPY[ask].title + '?'} confirm={COPY[ask].confirm} danger={COPY[ask].danger} oncancel={() => (ask = null)} onconfirm={() => resolve(e, ask as D)}>
-          <div>{COPY[ask].body}{#if COPY[ask].cmd} <span class="mono">{COPY[ask].cmd}</span>{/if}</div>
+        <Confirm title={COPY[ask].title + '?'} confirm={COPY[ask].confirm} kind={ask === 'retry_fresh' ? 'warn' : COPY[ask].danger ? 'dng' : 'pri'} oncancel={() => (ask = null)} onconfirm={() => resolve(e, ask as D)}>
+          <div>{COPY[ask].body}{#if COPY[ask].cmd}{' '}<span class="mono">{COPY[ask].cmd}</span>{/if}</div>
         </Confirm>
       {/if}
     {/if}

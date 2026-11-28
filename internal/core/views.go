@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -106,7 +107,7 @@ func (s *Service) ProjectDetail(ctx context.Context, id string) (contract.Projec
 	if err != nil {
 		return contract.ProjectDetail{}, err
 	}
-	d := contract.ProjectDetail{Project: p, Phases: []contract.PhaseRef{}, Tasks: []contract.TaskSummary{}, PendingApprovals: []contract.ApprovalSummary{}, Requirements: []contract.RequirementRef{}}
+	d := contract.ProjectDetail{Project: p, Phases: []contract.PhaseRef{}, Tasks: []contract.TaskSummary{}, PhaseTasks: []contract.PhaseTask{}, PendingApprovals: []contract.ApprovalSummary{}, Requirements: []contract.RequirementRef{}}
 	if v := s.currentVersion(ctx, id); v != "" {
 		rows, err := s.db.R.QueryContext(ctx, `SELECT id, key, title, state FROM phases WHERE workflow_version_id = ? ORDER BY position`, v)
 		if err != nil {
@@ -118,6 +119,15 @@ func (s *Service) ProjectDetail(ctx context.Context, id string) (contract.Projec
 			d.Phases = append(d.Phases, phaseRef(pid, key, title, st))
 		}
 		rows.Close()
+		for _, ph := range d.Phases {
+			ts, err := s.taskSummaries(ctx, ph.ID)
+			if err != nil {
+				return d, err
+			}
+			for _, t := range ts {
+				d.PhaseTasks = append(d.PhaseTasks, contract.PhaseTask{TaskSummary: t, PhaseID: ph.ID})
+			}
+		}
 		if p.ActivePhase != nil {
 			d.TasksPhase = p.ActivePhase.ID
 			d.Tasks, err = s.taskSummaries(ctx, p.ActivePhase.ID)
@@ -553,6 +563,17 @@ func (s *Service) ApprovalDetail(ctx context.Context, id string) (contract.Appro
 			d.Impact = "Completing closes the phase and asks for the next phase's start approval. Review what each task did and the validator results first. Validator commands run on what the agents wrote."
 			if rv, err := s.PhaseReview(ctx, sid); err == nil {
 				fact("Summary", rv.Summary, false)
+				if n := len(rv.Findings); n > 0 {
+					what := "changes no task accounts for. Read them"
+					if n == 1 {
+						what = "change no task accounts for. Read it"
+					}
+					value := fmt.Sprintf("%d %s in the phase review.", n, what)
+					if slices.ContainsFunc(rv.Findings, notCompared) {
+						value = "The work tree was not compared: the repository configures a git filter. Review the changes by hand."
+					}
+					fact("Outside the plan", value, false)
+				}
 			}
 		}
 	default:

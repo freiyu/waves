@@ -65,7 +65,7 @@ In the dashboard:
 1. Open the project and its **Plan** tab. Read the phases, the tasks and the **validator commands** (Waves runs
    those commands, so read them; they run as soon as the last task of a phase is done, before you review it), then **Submit** the workflow. It now waits in the same tab: **Approve** it.
 2. Approve the **Phase Start** of phase 1. It is listed under **Pending approvals** in the project's Overview tab and
-   under **Needs your decision** on the Overview page (the lock icon approves, the cross rejects). Phase gates always
+   under **Needs your decision** on the Overview page (press **Approve** or **Reject**). Phase gates always
    ask for your passphrase.
 3. In `claude` say: *Work through the Waves tasks of this project one after another: claim a task, get its context,
    do the work, submit the result, then take the next one.* (Claude Code may ask permission for each Waves tool: allow

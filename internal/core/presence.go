@@ -135,6 +135,14 @@ func (s *Service) StreamOpen(ctx context.Context, p Principal, session string) e
 	}
 	s.pres.add(p.ProjectID, session)
 	err := s.tx(ctx, func(t *Tx) error {
+		// Checked again here: a request authenticated just before the project was disconnected must hold nothing after it.
+		var live int
+		if err := t.QueryRowContext(ctx, `SELECT count(*) FROM credentials WHERE id = ? AND revoked_at IS NULL`, p.CredID).Scan(&live); err != nil {
+			return wrap(err, "check the credential")
+		}
+		if live == 0 {
+			return errWrongScope
+		}
 		ls, err := s.leasesOfStream(ctx, t, p.ProjectID, session)
 		if err != nil {
 			return err

@@ -5,11 +5,10 @@
   // `onconfirm`, which does the step-up and the action. Errors from the service
   // are shown here in words, never as a color change alone.
   import type { Snippet } from 'svelte';
-  import { onDestroy, tick } from 'svelte';
-  import { ApiError } from '../api/client';
-  import Note from './Note.svelte';
+  import { passphraseAttempt } from './attempt.svelte';
+  import { showDone } from './done.svelte';
+  import PassField from './PassField.svelte';
   import Btn from './Btn.svelte';
-  import Icon from './Icon.svelte';
   import { visible } from './text';
 
   interface Props {
@@ -18,6 +17,8 @@
     facts?: Array<{ label: string; value: string; mono?: boolean }>;
     extra?: Snippet;
     confirm: string;
+    /** The word shown when the service accepted it, for example "Approved". */
+    done: string;
     danger?: boolean;
     /** False when a held elevation already covers the action. */
     needPassphrase?: boolean;
@@ -31,52 +32,23 @@
     onconfirm: (passphrase: string) => Promise<void>;
     oncancel: () => void;
   }
-  let { title, kicker = 'Approval requires your passphrase', facts = [], extra, confirm, danger = false, needPassphrase = true, note, blocked = false, incomplete = false, nopass = 'Your unlocked window already covers this action. No passphrase is asked.', fieldLabel = 'Approval passphrase', onconfirm, oncancel }: Props = $props();
+  let { title, kicker = 'Approval requires your passphrase', facts = [], extra, confirm, done, danger = false, needPassphrase = true, note, blocked = false, incomplete = false, nopass = 'Your unlocked window already covers this action. No passphrase is asked.', fieldLabel = 'Approval passphrase', onconfirm, oncancel }: Props = $props();
 
+  const attempt = passphraseAttempt('su-pass');
   let pass = $state('');
-  let busy = $state(false);
-  let err = $state<ApiError | undefined>();
-  let wait = $state(0); // seconds left of a rate limit
-  let timer: ReturnType<typeof setInterval> | undefined;
-
-  onDestroy(() => clearInterval(timer));
-
-  function startWait(s: number) {
-    wait = s;
-    clearInterval(timer);
-    timer = setInterval(() => {
-      wait = Math.max(0, wait - 1);
-      if (wait === 0) {
-        clearInterval(timer);
-        if (err?.code === 'rate_limited') err = undefined; // the wait is over; do not keep saying "try again in"
-      }
-    }, 1000);
-  }
-
-  const chainBroken = $derived(err?.code === 'audit_chain_broken' || blocked);
-  const lockedOut = $derived(wait > 0);
-  const wrong = $derived(err?.code === 'stepup_failed'); // shown on the field itself, not in a note above it
-  let fails = $state(0); // each failure replays the shake
-  const fmt = (s: number) => `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`;
+  const busy = $derived(attempt.busy);
+  const chainBroken = $derived(attempt.err?.code === 'audit_chain_broken' || blocked);
+  const lockedOut = $derived(attempt.wait > 0);
 
   async function submit(e: Event) {
     e.preventDefault();
     if (busy || lockedOut || chainBroken) return;
-    busy = true;
-    err = undefined;
     const typed = pass;
     pass = ''; // the passphrase never stays in the page longer than the call
-    try {
-      await onconfirm(typed);
-    } catch (x) {
-      err = x instanceof ApiError ? x : new ApiError(0, 'unknown', String(x));
-      if (err.code === 'stepup_failed') fails++;
-      if (err.code === 'rate_limited') startWait(err.body?.retry_after_s ?? 30);
-    } finally {
-      busy = false;
-      await tick(); // the field is re-enabled only after this update
-      document.getElementById('su-pass')?.focus();
-    }
+    const [word, bad] = [done, danger]; // read now: on success the caller may change or close the dialog
+    if (await attempt.run(() => onconfirm(typed))) showDone(word, bad);
+    // The dialog is still open after a success only if the caller keeps it; either way the field takes focus again.
+    document.getElementById('su-pass')?.focus();
   }
 </script>
 
@@ -88,30 +60,7 @@
         <dl class="kv">{#each facts as f}<dt>{f.label}</dt><dd class:mono={f.mono}>{visible(f.value)}</dd>{/each}</dl>
       {/if}
       {@render extra?.()}
-      {#if chainBroken}
-        <Note kind="warn" role="alert"><b>Approvals are blocked.</b> The audit chain did not verify{err?.body?.record ? ` at record ${err.body.record.toLocaleString('en')}` : ''}. A human must acknowledge this on the Activity page first.</Note>
-      {:else if lockedOut}
-        <Note kind="dng" role="alert"><b>Too many attempts.</b> Try again in {fmt(wait)}. The failed attempts were recorded in the audit log.</Note>
-      {:else if err && !wrong}
-        <Note kind="dng" icon="fail" role="alert"><b>{err.message}</b>{#if err.nextStep} {err.nextStep}{/if}</Note>
-      {/if}
-      {#if needPassphrase}
-        <div>
-          <label class="lbl" for="su-pass">{fieldLabel}</label>
-          {#key fails}
-            <div class="pw" class:bad={wrong}>
-              <input id="su-pass" class="field w-full min-h-9" type="password" autocomplete="off" spellcheck="false" bind:value={pass} disabled={chainBroken || lockedOut || busy} aria-invalid={wrong || undefined} aria-describedby={wrong ? 'su-wrong' : undefined} />
-              {#if wrong}<span class="pw-x" aria-hidden="true"><Icon name="fail" size={20} stroke={2} /></span>{/if}
-            </div>
-          {/key}
-          {#if wrong}
-            <p id="su-wrong" class="pw-msg" role="alert"><b>Wrong passphrase.</b> {err?.body?.attempts_left ?? 0} {err?.body?.attempts_left === 1 ? 'attempt' : 'attempts'} left before a delay. Nothing was approved.</p>
-          {/if}
-        </div>
-        <div class="muted">{note ?? 'Typed into this page only; not stored, not logged. Valid for this one action.'}</div>
-      {:else}
-        <Note kind="neu" icon="lock">{nopass}</Note>
-      {/if}
+      <PassField {attempt} bind:value={pass} needed={needPassphrase} label={fieldLabel} {note} {nopass} {blocked} />
     </div>
     <div class="mf">
       <Btn disabled={busy} onclick={oncancel}>Cancel</Btn>

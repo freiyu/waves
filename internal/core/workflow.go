@@ -20,7 +20,8 @@ const planningInstructions = `Read the requirements below. Propose a workflow as
 Rules: unknown fields are rejected; keys match ^[a-z0-9][a-z0-9_-]{0,63}$ and are unique in the document;
 every phase needs an objective, at least one task and at least one validator; a code_change task needs acceptance criteria;
 depends_on names tasks in the same or an earlier phase, without cycles; command validators run with /bin/sh -c in the
-project folder after a human approves the exact command text. Submit with waves_submit_workflow_proposal. Nothing runs until a human approves.`
+project folder after a human approves the exact command text. Submit with waves_submit_workflow_proposal. Nothing runs until a human approves.
+Aim for task titles of 60 characters or fewer that name the work (up to 160 is accepted).`
 
 // proposalShape is the proposal schema the harness receives: every field the
 // validator accepts, with its type or allowed values. "?" marks optional fields.

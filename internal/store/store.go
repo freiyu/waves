@@ -356,7 +356,7 @@ func Restore(ctx context.Context, src, path string) (RestoreInfo, error) {
 
 // removeWorking deletes a working copy and the sidecar files SQLite may have made for it.
 func removeWorking(tmp string) {
-	for _, sfx := range []string{"", "-wal", "-shm"} {
+	for _, sfx := range []string{"", "-wal", "-shm", "-journal"} {
 		os.Remove(tmp + sfx)
 	}
 }

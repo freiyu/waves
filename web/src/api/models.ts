@@ -43,5 +43,6 @@ export type EventPayloads = S['ContractEventPayloads'];
 export type ExecutionState = ExecutionSummary['state'];
 export type ApprovalCategory = ApprovalSummary['category'];
 export type WorkflowTask = S['ContractWorkflowTask'];
+export type PhaseTask = S['ContractPhaseTask'];
 export type ReviewTask = S['ContractReviewTask'];
 export type Recovery = S['ContractRecovery'];

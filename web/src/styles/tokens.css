@@ -1,60 +1,78 @@
-/* Tokens: light (warm Lotus) by default, dark (Kanagawa) by system preference, manual override through data-theme.
-   Components use these names only. Motion tokens at the bottom are theme independent. */
+/* Tokens: light (harbor) by default, dark (Kanagawa Dragon) by system preference, manual override through data-theme.
+   Components use these names only. Fonts and motion tokens at the bottom are theme independent. */
 :root {
-  --bg: #F3EEE3; --surface: #FBF8F1; --surface-muted: #E9E3D4; --border: #D8D0BC; --border-strong: #8C8574;
-  --text: #2B2D3A; --text-muted: #5C5A57; --primary: #3F5F96; --primary-text: #FBF8F1; --focus: #3F5F96;
-  --canvas: #EFE9DB; --canvas-dot: #C9C0A8;
-  --status-active: #35568C; --status-active-soft: #DDE6F0;
-  --status-attention: #68508C; --status-attention-soft: #E8E1EE;
-  --status-ok: #496736; --status-ok-soft: #E1E9D6;
-  --status-danger: #A33544; --status-danger-soft: #F3DCDA;
-  --status-warning: #80590D; --status-warning-soft: #F4E6C2;
-  --status-neutral: #5C5A57; --status-neutral-soft: #E7E2D6;
-  --status-waiting: #316762; --status-waiting-soft: #D9E8E3;
-  --accent: #964D00; --accent-soft: #F6E1C4;
-  --scrim: rgba(43, 45, 58, 0.4);
-  --overlay: var(--scrim);
-  /* Command blocks are near-black in both themes. */
-  --code-bg: #16161D; --code-text: #DCD7BA; --code-border: #363646;
+  --bg: #E8EEEB; --surface: #F7F9F6; --surface-muted: #DAE3DF; --border: #CBD6D1; --border-strong: #6F8781; --divider: #D5DFDA;
+  --text: #10262D; --text-2: #33494F; --text-muted: #4F6469; --ghost: #B5C4BE; --queued: #6F8781;
+  --primary: #10262D; --primary-text: #E8EEEB; --link: #1A5F8A; --focus: #1A5F8A;
+  --canvas: #E8EEEB; --canvas-dot: #CBD6D1;
+  --status-active: #1A5F8A; --status-active-soft: #D6E6F0;
+  --status-attention: #AE2F17; --status-attention-soft: #F6DDD5;
+  --status-ok: #2F6B49; --status-ok-soft: #DCEADF;
+  --status-danger: #8A2350; --status-danger-soft: #F1DCE5;
+  --status-warning: #8A4F08; --status-warning-soft: #F2E2C9;
+  --status-neutral: #33494F; --status-neutral-soft: #DAE3DF;
+  --status-waiting: #176B66; --status-waiting-soft: #D5EAE6;
+  /* Selection and the fork tag are neutral: the warm signal is only for what needs a human decision. */
+  --accent: #10262D; --accent-soft: #DAE3DF;
+  --scrim: rgba(16, 38, 45, 0.4);
+  --code-bg: #10262D; --code-text: #E8EEEB; --code-border: #10262D;
+  --btn-dng: #B3261E; --btn-warn: #EFB93F; --btn-warn-fg: #10262D;
+  /* The success mark stands on a dimmed screen, which is dark in both themes: the dark blocks do not override these. */
+  --done-dim: rgba(6, 14, 16, 0.82); --done-text: #F4F8F6; --done-ok: #8EE0B0; --done-bad: #FF9C92;
   color-scheme: light;
+  --overlay: var(--scrim);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #16161D; --surface: #1F1F28; --surface-muted: #2A2A37; --border: #363646; --border-strong: #6A6A82;
-    --text: #DCD7BA; --text-muted: #A09D8E; --primary: #7E9CD8; --primary-text: #16161D; --focus: #7E9CD8;
-    --canvas: #1A1A22; --canvas-dot: #363646;
-    --status-active: #8FB0E6; --status-active-soft: #223249;
-    --status-attention: #B6A2D4; --status-attention-soft: #2E2840;
-    --status-ok: #98BB6C; --status-ok-soft: #25301F;
-    --status-danger: #E8808C; --status-danger-soft: #3A2024;
-    --status-warning: #E6C384; --status-warning-soft: #352C1A;
-    --status-neutral: #A09D8E; --status-neutral-soft: #2A2A37;
-    --status-waiting: #7FC1B4; --status-waiting-soft: #1D3430;
-    --accent: #FFA066; --accent-soft: #3A2616;
-    --scrim: rgba(8, 8, 12, 0.6);
+    --bg: #181616; --surface: #1D1C19; --surface-muted: #282727; --border: #393836; --border-strong: #7A8382; --divider: #282727;
+    --text: #C5C9C5; --text-2: #AEAEA5; --text-muted: #9E9B93; --ghost: #625E5A; --queued: #7A8382;
+    --primary: #C5C9C5; --primary-text: #181616; --link: #7E9CD8; --focus: #7E9CD8;
+    --canvas: #181616; --canvas-dot: #393836;
+    --status-active: #7E9CD8; --status-active-soft: #1E2433;
+    --status-attention: #FFA066; --status-attention-soft: #3A2618;
+    --status-ok: #98BB6C; --status-ok-soft: #232B1D;
+    --status-danger: #D27E99; --status-danger-soft: #35222A;
+    --status-warning: #E6C384; --status-warning-soft: #33291A;
+    --status-neutral: #AEAEA5; --status-neutral-soft: #282727;
+    --status-waiting: #7AA89F; --status-waiting-soft: #1B2B29;
+    /* Selection and the fork tag are neutral: the warm signal is only for what needs a human decision. */
+    --accent: #C5C9C5; --accent-soft: #282727;
+    --scrim: rgba(8, 8, 8, 0.6);
+    --code-bg: #0D0C0C; --code-text: #C5C9C5; --code-border: #282727;
+    --btn-dng: #E46876; --btn-warn: #E6C384; --btn-warn-fg: #181616;
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --bg: #16161D; --surface: #1F1F28; --surface-muted: #2A2A37; --border: #363646; --border-strong: #6A6A82;
-  --text: #DCD7BA; --text-muted: #A09D8E; --primary: #7E9CD8; --primary-text: #16161D; --focus: #7E9CD8;
-  --canvas: #1A1A22; --canvas-dot: #363646;
-  --status-active: #8FB0E6; --status-active-soft: #223249;
-  --status-attention: #B6A2D4; --status-attention-soft: #2E2840;
-  --status-ok: #98BB6C; --status-ok-soft: #25301F;
-  --status-danger: #E8808C; --status-danger-soft: #3A2024;
-  --status-warning: #E6C384; --status-warning-soft: #352C1A;
-  --status-neutral: #A09D8E; --status-neutral-soft: #2A2A37;
-  --status-waiting: #7FC1B4; --status-waiting-soft: #1D3430;
-  --accent: #FFA066; --accent-soft: #3A2616;
-  --scrim: rgba(8, 8, 12, 0.6);
+  --bg: #181616; --surface: #1D1C19; --surface-muted: #282727; --border: #393836; --border-strong: #7A8382; --divider: #282727;
+  --text: #C5C9C5; --text-2: #AEAEA5; --text-muted: #9E9B93; --ghost: #625E5A; --queued: #7A8382;
+  --primary: #C5C9C5; --primary-text: #181616; --link: #7E9CD8; --focus: #7E9CD8;
+  --canvas: #181616; --canvas-dot: #393836;
+  --status-active: #7E9CD8; --status-active-soft: #1E2433;
+  --status-attention: #FFA066; --status-attention-soft: #3A2618;
+  --status-ok: #98BB6C; --status-ok-soft: #232B1D;
+  --status-danger: #D27E99; --status-danger-soft: #35222A;
+  --status-warning: #E6C384; --status-warning-soft: #33291A;
+  --status-neutral: #AEAEA5; --status-neutral-soft: #282727;
+  --status-waiting: #7AA89F; --status-waiting-soft: #1B2B29;
+  /* Selection and the fork tag are neutral: the warm signal is only for what needs a human decision. */
+  --accent: #C5C9C5; --accent-soft: #282727;
+  --scrim: rgba(8, 8, 8, 0.6);
+  --code-bg: #0D0C0C; --code-text: #C5C9C5; --code-border: #282727;
+  --btn-dng: #E46876; --btn-warn: #E6C384; --btn-warn-fg: #181616;
   color-scheme: dark;
+}
+
+:root {
+  --sans: 'M PLUS Rounded 1c', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 /* Motion tokens. Entrances ease-out, moves ease-in-out, no bounce; an exit is 20% shorter than its entrance. */
 :root {
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* the rail: away quickly, a long soft landing */
   --dur-fast: 150ms; --dur-base: 200ms; --dur-slow: 250ms;
   --dur-fast-out: 120ms; --dur-base-out: 160ms; --dur-slow-out: 200ms;
   --stagger: 30ms;

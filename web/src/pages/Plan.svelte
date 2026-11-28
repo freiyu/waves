@@ -10,7 +10,7 @@
   import { ago } from '../lib/format';
   import { ApiError } from '../api/client';
   import Note from '../lib/Note.svelte';
-  import type { Proposal, Validator, WorkflowTask } from '../api/models';
+  import type { ProjectDetail, Proposal, Validator, WorkflowTask } from '../api/models';
   import { visible } from '../lib/text';
   import SectionHead from '../lib/SectionHead.svelte';
   import ApprovalCard from '../lib/ApprovalCard.svelte';
@@ -43,15 +43,20 @@
     { key: 'cmd', label: 'Exact command or items', cell: vcmd },
     { key: 'to', label: 'Timeout', text: (r) => (r.timeout_s ? `${r.timeout_s} s` : 'none') },
   ];
-  // The version shown: the one the human picked, else a draft, else one waiting for a decision, else the approved one, else the newest.
+  // The version shown: the one the human picked, else one waiting for a decision, else a draft, else the approved one, else the newest.
   const wf = resource(() => a.api.workflow(pid), ['workflow.changed']);
   const short = (h: string) => (h.length > 16 ? `${h.slice(0, 7)}…${h.slice(-4)}` : h);
   let picked = $state('');
   const versionId = $derived.by(() => {
     const vs = wf.data?.versions ?? [];
-    return vs.find((v) => v.id === picked)?.id ?? (vs.find((v) => v.state === 'draft') ?? vs.find((v) => v.state === 'awaiting_approval') ?? vs.find((v) => v.id === wf.data?.current_id) ?? vs[0])?.id ?? '';
+    return vs.find((v) => v.id === picked)?.id ?? (vs.find((v) => v.state === 'awaiting_approval') ?? vs.find((v) => v.state === 'draft') ?? vs.find((v) => v.id === wf.data?.current_id) ?? vs[0])?.id ?? '';
   });
   const ver = resource(async () => (versionId ? a.api.workflowVersion(versionId) : null), ['workflow.changed']);
+  // Two versions can wait at once, also with the same content, so a version's approval is the one that names its number and
+  // is bound to its content hash.
+  const waitingItems = $derived(res.data?.pending_approval_items.filter((x) => x.category === 'workflow') ?? []);
+  const bound = resource(async () => Promise.all(waitingItems.map((x) => a.api.approval(x.id))), ['approval.changed', 'workflow.changed']);
+  const approvalOf = (v: { number: number; content_hash: string }) => bound.data?.find((d) => new RegExp(`^Workflow v${v.number}\\b`).test(d.subject) && d.facts.some((f) => f.label === 'Content hash' && f.value === v.content_hash));
   async function submit(id: string) {
     error = '';
     try {
@@ -94,12 +99,9 @@
 {#snippet tcode(r: WorkflowTask)}<span class="mono">{r.code}</span>{/snippet}
 {#snippet vcmd(r: Validator)}{#if r.command}<span class="mono">{visible(r.command)}</span>{:else}{visible(r.items?.join('; ') ?? '')}{/if}{/snippet}
 
-<View {res} label="the planning step">
-  {#snippet children(p)}
-    <ProjectHead id={p.id} current="plan" project={p} />
-    {#if error}<Note kind="dng" role="alert">{error}</Note>{/if}
+{#snippet planning(p: ProjectDetail)}
     <Panel title="Planning request">
-      {#snippet right()}<Btn kind="pri" sm disabled={busy || p.planning.request?.state === 'waiting'} onclick={request}>Request planning</Btn>{/snippet}
+      {#snippet right()}<Btn kind={waitingItems.length ? '' : 'pri'} sm disabled={busy || p.planning.request?.state === 'waiting'} onclick={request}>Request planning</Btn>{/snippet}
       <div class="pb stack">
         {#if p.planning.request}
           <div class="row wrap"><Badge state={p.planning.request.state === 'waiting' ? 'queued' : p.planning.request.state === 'fetched' ? 'in_progress' : 'completed'} text={p.planning.request.state === 'waiting' ? 'Waiting for a harness' : p.planning.request.state === 'fetched' ? 'Fetched by a harness' : 'Proposal submitted'} /><span class="muted">Planning request <span class="mono">{p.planning.request.id}</span> created {ago(p.planning.request.created_at)}</span>{#if p.planning.request.state === 'waiting'}<span class="dots" role="img" aria-label="Waiting"><i></i><i></i><i></i></span>{/if}</div>
@@ -114,10 +116,10 @@
         {/if}
       </div>
     </Panel>
+    {#if p.planning.latest_proposal}
+      {@const pr = p.planning.latest_proposal}
     <Panel title="Latest proposal">
       <div class="pb stack">
-        {#if p.planning.latest_proposal}
-          {@const pr = p.planning.latest_proposal}
           {#if pr.valid}
             <div class="row wrap"><Badge state="passed" text="Proposal valid" /><span class="muted"><span class="mono">{pr.id}</span> · version {pr.version} · it becomes a draft version under Workflow</span></div>
           {:else}
@@ -125,11 +127,11 @@
             <Table label="Proposal errors" rows={pr.errors} columns={cols} rowKey={(r) => r.code + r.path} />
             <div class="muted small">The harness can read these errors through MCP and submit a corrected proposal as a new immutable version.</div>
           {/if}
-        {:else}
-          <div class="muted">No proposal has been submitted yet.</div>
-        {/if}
       </div>
     </Panel>
+    {/if}
+{/snippet}
+{#snippet versions()}
     <View res={wf} label="the workflow versions">
       {#snippet children(w)}
         {#if !w.versions.length}
@@ -138,7 +140,7 @@
           <View res={ver} label="the workflow version">
             {#snippet children(v)}
               {#if v}
-                {@const waiting = p.pending_approval_items.find((x) => x.category === 'workflow')}
+                {@const waiting = approvalOf(v)}
                 {@const open = v.state === 'draft' || v.state === 'awaiting_approval'}
                 <SectionHead title="Workflow · version {v.number}" sub="hash {short(v.content_hash)}{v.proposal_id ? ' · from proposal ' + v.proposal_id : ''}">
                   {#snippet right()}
@@ -147,7 +149,11 @@
                     {#if v.state === 'approved' || v.state === 'rejected'}<Btn onclick={() => revise(v.id)}>Revise</Btn>{/if}
                   {/snippet}
                 </SectionHead>
-                {#if v.state === 'awaiting_approval' && waiting}<ApprovalCard id={waiting.id} commands={false} />{/if}
+                {#if v.state === 'awaiting_approval'}
+                  {#if bound.error}<Note kind="dng" role="alert">The approval could not be loaded: {bound.error.message} <button type="button" class="linkbtn font-semibold" onclick={() => void bound.reload()}>Retry</button></Note>
+                  <!-- A new card for each approval: nothing of the previous one, an open dialog included, carries over. -->
+                  {:else if waiting}{#key waiting.id}<ApprovalCard id={waiting.id} commands={false} />{/key}{/if}
+                {/if}
                 {#if open}<Note kind="warn"><b>Waves will run these commands</b> on your machine when the last task of a phase is Done, before you review that phase, so they also run on what the agents wrote. Approving this workflow approves exactly the strings below. Changing one creates a new version.</Note>{/if}
                 {#each v.phases as ph (ph.id)}
                   <Panel title="{ph.code} {ph.title}" level={3}>
@@ -173,5 +179,13 @@
         {/if}
       {/snippet}
     </View>
+{/snippet}
+
+<View {res} label="the planning step">
+  {#snippet children(p)}
+    <ProjectHead id={p.id} current="plan" project={p} />
+    {#if error}<Note kind="dng" role="alert">{error}</Note>{/if}
+    <!-- A decision that waits comes first. -->
+    {#if waitingItems.length}{@render versions()}{@render planning(p)}{:else}{@render planning(p)}{@render versions()}{/if}
   {/snippet}
 </View>

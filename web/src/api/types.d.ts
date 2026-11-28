@@ -2669,6 +2669,8 @@ export interface components {
         ContractExecutionDetail: {
             diff_files: number;
             duration_s?: null | number;
+            /** Format: date-time */
+            ended_at?: null | string;
             error?: string;
             events: components["schemas"]["ContractExecutionEvent"][];
             harness: string;
@@ -2710,6 +2712,8 @@ export interface components {
         };
         ContractExecutionSummary: {
             duration_s?: null | number;
+            /** Format: date-time */
+            ended_at?: null | string;
             harness: string;
             id: string;
             /** @enum {string} */
@@ -2862,6 +2866,19 @@ export interface components {
             validators: components["schemas"]["ContractValidatorResult"][];
             workflow_number: number;
         };
+        ContractPhaseTask: {
+            code: string;
+            depends_on: string[];
+            execution_id?: string;
+            id: string;
+            /** @enum {string} */
+            mode: "code_change" | "read_only";
+            phase_id: string;
+            /** @enum {string} */
+            state: "backlog" | "ready" | "in_progress" | "waiting_approval" | "in_review" | "blocked" | "done" | "cancelled";
+            state_detail?: string;
+            title: string;
+        };
         ContractPlanning: {
             latest_proposal?: components["schemas"]["ContractProposal"];
             request?: components["schemas"]["ContractPlanningRequest"];
@@ -2911,6 +2928,7 @@ export interface components {
             path: string;
             pending_approval_items: components["schemas"]["ContractApprovalSummary"][];
             pending_approvals: number;
+            phase_tasks: components["schemas"]["ContractPhaseTask"][];
             phases: components["schemas"]["ContractPhaseRef"][];
             planning: components["schemas"]["ContractPlanning"];
             progress_pct: number;

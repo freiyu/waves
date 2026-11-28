@@ -274,6 +274,23 @@ func TestGateBypass(t *testing.T) {
 			_, err := c.Connect(t.Context(), &sdk.StreamableClientTransport{Endpoint: i.url("/mcp"), HTTPClient: &http.Client{Transport: bearerRT(lease)}}, nil)
 			return err != nil, errText(err)
 		}},
+		{"MCP session of another project closed with this project's token", "mcp", func() (bool, string) {
+			c := sdk.NewClient(&sdk.Implementation{Name: "direct"}, nil)
+			cs, err := c.Connect(t.Context(), &sdk.StreamableClientTransport{Endpoint: i.url("/mcp"), HTTPClient: &http.Client{Transport: bearerRT(i.secret("mcp/" + work.id + ".token"))}}, nil)
+			if err != nil {
+				return false, err.Error()
+			}
+			defer cs.Close()
+			req, _ := http.NewRequest("DELETE", i.url("/mcp"), nil)
+			req.Header.Set("Mcp-Session-Id", cs.ID())
+			res, err := (&http.Client{Transport: bearerRT(mcpTok)}).Do(req)
+			if err != nil {
+				return false, err.Error()
+			}
+			res.Body.Close()
+			_, alive := cs.ListTools(t.Context(), nil)
+			return res.StatusCode == http.StatusNotFound && alive == nil, fmt.Sprintf("%d, the owner's session: %s", res.StatusCode, errText(alive))
+		}},
 		{"MCP claim of a task in a phase waiting at its gate", "scheduler", func() (bool, string) {
 			task := i.str(`SELECT id FROM tasks WHERE phase_id = ? LIMIT 1`, phase)
 			ga := p.agent(i)

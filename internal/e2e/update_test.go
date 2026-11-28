@@ -283,3 +283,115 @@ func TestUpdateFrom101To120OnTheRealBinary(t *testing.T) {
 		t.Fatalf("the 1.0.1 guard hook under 1.2.0: exit %d", code)
 	}
 }
+
+// A user of 1.2.0 runs `waves update` and gets 1.2.1, and can go back: the real 1.2.0 binary (built from its tag) replaces
+// itself from a release folder, the service restarts on the same database without a migration, a phase review that waited in
+// 1.2.0 is still decided only by a human with the passphrase, the installed hook still runs, and 1.2.0 opens the database again.
+func TestUpdateFrom120To121AndBackOnTheRealBinary(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("linux only")
+	}
+	i := newInst(t)
+	i.stop() // this test runs the background service, as a user would
+	root := t.TempDir()
+	installed := filepath.Join(root, "bin", "waves")
+	os.MkdirAll(filepath.Dir(installed), 0o755)
+	name := "waves-linux-" + runtime.GOARCH
+	// A release folder as `make release` lays it out: the binary and its checksum.
+	folder := func(dir, binary string) string {
+		d := filepath.Join(root, dir)
+		os.MkdirAll(d, 0o755)
+		b, err := os.ReadFile(binary)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h := sha256.Sum256(b)
+		os.WriteFile(filepath.Join(d, name), b, 0o755)
+		os.WriteFile(filepath.Join(d, "SHA256SUMS"), []byte(hex.EncodeToString(h[:])+"  "+name+"\n"), 0o644)
+		return d
+	}
+	was := folder("was", buildReleaseAs(t, "v1.2-stage-6-approved", "1.2.0"))
+	candidate := filepath.Join(t.TempDir(), "waves-next")
+	buildAs(t, "1.2.1", candidate)
+	next := folder("next", candidate)
+	oldBytes, _ := os.ReadFile(filepath.Join(was, name))
+	if err := os.WriteFile(installed, oldBytes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	current := bin
+	bin = installed
+	defer func() { bin = current }()
+
+	runs := func(version string) {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for i.serverVersion() != version && time.Now().Before(deadline) {
+			time.Sleep(100 * time.Millisecond)
+		}
+		if v := i.serverVersion(); v != version {
+			t.Fatalf("service version %q, want %s", v, version)
+		}
+		if out, _ := i.runAs(installed, "version"); strings.TrimSpace(out) != "waves "+version {
+			t.Fatalf("binary version %q, want %s", out, version)
+		}
+	}
+	if out, code := i.runAs(installed, "start"); code != 0 {
+		t.Fatalf("start: %s", out)
+	}
+	t.Cleanup(func() { i.runAs(installed, "stop") })
+	runs("1.2.0")
+	// What 1.2.0 leaves behind: a finished phase whose review waits for the human.
+	p, a := i.planned("carried")
+	a.claim()
+	os.WriteFile(filepath.Join(p.dir, "hello.txt"), []byte("hello\n"), 0o600)
+	a.must("waves_submit_result", map[string]any{"summary": "wrote hello.txt", "status": "completed"}, nil)
+	waiting := func() bool {
+		return i.count(`SELECT count(*) FROM approvals WHERE category = 'phase_completion' AND state = 'pending'`) == 1
+	}
+	for deadline := time.Now().Add(15 * time.Second); !waiting() && time.Now().Before(deadline); {
+		time.Sleep(100 * time.Millisecond)
+	}
+	apr := p.pending("phase_completion")
+	a.kill()
+	schema := i.count(`SELECT max(version) FROM schema_migrations`)
+
+	out, code := i.runAs(installed, "update", "--from", next)
+	if code != 0 || !strings.Contains(out, "1.2.0 -> 1.2.1") || !strings.Contains(out, "service was restarted") {
+		t.Fatalf("update (exit %d): %s", code, out)
+	}
+	runs("1.2.1")
+	if b, _ := os.ReadFile(installed + ".previous"); string(b) != string(oldBytes) {
+		t.Fatal("the 1.2.0 binary was not kept as waves.previous")
+	}
+	noLeftovers(t, installed)
+	if v := i.count(`SELECT max(version) FROM schema_migrations`); v != schema {
+		t.Fatalf("schema version %d after the update, was %d: 1.2.1 has no migration", v, schema)
+	}
+	if m, _ := filepath.Glob(i.dbPath() + ".pre-v*.bak"); len(m) != 0 {
+		t.Fatalf("a migration backup exists although nothing was migrated: %v", m)
+	}
+	if st, _ := i.operator().call("POST", "/approvals/"+apr+"/decision", map[string]string{"decision": "approve"}, nil, nil); st < 400 {
+		t.Fatalf("the operator token decided the waiting review without a passphrase: %d", st)
+	}
+	hook := p.installedHook(t) // installed by 1.2.0
+	if code, _ := i.runHook(hook, writeEvent("sess-carried", p.dir, filepath.Join(p.dir, "x.txt"), "toolu_up")); code != 0 {
+		t.Fatalf("the 1.2.0 guard hook under 1.2.1: exit %d", code)
+	}
+	i.dashboard().mustDecide(apr, "approve", nil)
+
+	// Back again: an older release needs --force, then opens the same database.
+	if out, _ := i.runAs(installed, "update", "--from", was); !strings.Contains(out, "Nothing changed") {
+		t.Fatalf("an older release without --force: %s", out)
+	}
+	runs("1.2.1")
+	if out, code := i.runAs(installed, "update", "--from", was, "--force"); code != 0 {
+		t.Fatalf("back to 1.2.0 (exit %d): %s", code, out)
+	}
+	runs("1.2.0")
+	if got := i.count(`SELECT count(*) FROM approvals WHERE state = 'approved' AND category = 'phase_completion'`); got != 1 {
+		t.Fatalf("1.2.0 sees %d approved reviews, want the one 1.2.1 recorded", got)
+	}
+	if code, _ := i.runHook(hook, writeEvent("sess-back", p.dir, filepath.Join(p.dir, "y.txt"), "toolu_back")); code != 0 {
+		t.Fatalf("the guard hook after going back: exit %d", code)
+	}
+}

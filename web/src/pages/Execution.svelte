@@ -103,7 +103,7 @@
       </div>
     </div>
     {#if interrupting}
-      <Confirm title="Interrupt {e.task_code}?" confirm="Interrupt" danger oncancel={() => (interrupting = false)} onconfirm={async () => { await a.api.interrupt(e.id); interrupting = false; toast.success('Interrupt sent'); await res.reload(); }}>
+      <Confirm title="Interrupt {e.task_code}?" confirm="Interrupt" kind="dng" oncancel={() => (interrupting = false)} onconfirm={async () => { await a.api.interrupt(e.id); interrupting = false; toast.success('Interrupt sent'); await res.reload(); }}>
         <div>{e.task_title} ({e.id}).</div>
         {#if e.state === 'queued'}<div>A queued execution has not started. It is removed from the queue.</div>
         {:else}<div>Waves signals the agent's process group and then checks for processes it left behind. Work already done stays in the workspace and in the diff. The task is not rerun automatically.</div>{/if}

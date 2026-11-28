@@ -1,6 +1,5 @@
 <script lang="ts">
-  // Filter chips with counts (single choice) as one segmented pill. A highlight pill sits inside it, above the pill's
-  // own background and under the labels, and chases the pressed chip on a spring: thin while it moves fast, full width
+  // Filter chips with counts (single choice), 44 px pills. A tinted highlight pill sits under the labels and chases the pressed chip on a spring: thin while it moves fast, full width
   // at rest. A new click mid-flight only changes the target, so position, size and speed carry on without a jump.
   // Pressed state is also aria-pressed, never colour alone.
   import { onDestroy, tick } from 'svelte';
@@ -26,7 +25,7 @@
     bubble.style.width = `${w}px`;
     bubble.style.height = `${cur.h}px`;
     bubble.style.transform = `translate(${cur.x + cur.w / 2 - w / 2}px, ${cur.y}px)`; // y is the row's top, set by measure()
-    // A label turns light only while the highlight is behind it, so text is never light on light during the move.
+    // A label takes the highlight colour only while the highlight is behind it.
     const centre = cur.x + cur.w / 2;
     for (const b of box?.querySelectorAll<HTMLElement>('button') ?? []) b.toggleAttribute('data-under', Math.abs(centre - (b.offsetLeft + b.offsetWidth / 2)) < w / 2);
   }
@@ -74,12 +73,12 @@
 </script>
 
 <svelte:window onresize={measure} />
-<div bind:this={box} class="relative inline-flex max-w-full items-center gap-0 overflow-x-auto rounded-full border border-line bg-surface p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label={label}>
-  <span bind:this={bubble} aria-hidden="true" class="pointer-events-none absolute top-0 left-0 rounded-full bg-fg opacity-0"></span>
+<div bind:this={box} class="relative inline-flex max-w-full items-center gap-3 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label={label}>
+  <span bind:this={bubble} aria-hidden="true" class="pointer-events-none absolute top-0 left-0 box-border rounded-full border-2 border-st-active bg-st-active-soft opacity-0"></span>
   {#each options as o}
     <button type="button" aria-pressed={value === o.id} onclick={() => (value = o.id)}
-      class="relative z-10 inline-flex h-[26px] shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold text-fg-muted outline-offset-[-2px] not-data-[under]:hover:text-fg data-[under]:text-surface">
-      {o.label}{#if o.count !== undefined}<span class="font-normal">{o.count}</span>{/if}
+      class="relative inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line-strong px-[18px] text-[13px] font-semibold text-fg-2 outline-offset-[-2px] not-data-[under]:hover:text-fg data-[under]:border-transparent data-[under]:text-st-active">
+      {o.label}{#if o.count !== undefined}<span class="font-medium">{o.count}</span>{/if}
     </button>
   {/each}
 </div>

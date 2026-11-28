@@ -15,22 +15,28 @@ import (
 )
 
 const execSelect = `SELECT e.id, e.task_id, t.title, t.key, e.project_id, p.name, e.mode, e.state, COALESCE(t.blocked_reason,''), e.started_at, e.ended_at, e.created_at,
-	(SELECT w.since FROM execution_waits w WHERE w.execution_id = e.id AND w.ended_at IS NULL AND e.state = 'Running')
+	(SELECT w.since FROM execution_waits w WHERE w.execution_id = e.id AND w.ended_at IS NULL AND e.state = 'Running'),
+	(SELECT st.ts FROM state_transitions st WHERE st.entity_type = 'execution' AND st.entity_id = e.id AND st.to_state = e.state
+		AND e.state IN ('Interrupted','Disconnected') ORDER BY st.id DESC LIMIT 1)
 	FROM executions e JOIN tasks t ON t.id = e.task_id JOIN projects p ON p.id = e.project_id`
 
 func (s *Service) scanSummary(sc interface{ Scan(...any) error }) (contract.ExecutionSummary, error) {
 	var x contract.ExecutionSummary
 	var st, reason, created string
-	var started, ended, waiting sql.NullString
-	if err := sc.Scan(&x.ID, &x.TaskID, &x.TaskTitle, &x.TaskCode, &x.ProjectID, &x.ProjectName, &x.Mode, &st, &reason, &started, &ended, &created, &waiting); err != nil {
+	var started, ended, waiting, stopped sql.NullString
+	if err := sc.Scan(&x.ID, &x.TaskID, &x.TaskTitle, &x.TaskCode, &x.ProjectID, &x.ProjectName, &x.Mode, &st, &reason, &started, &ended, &created, &waiting, &stopped); err != nil {
 		return x, err
 	}
 	x.Harness, x.State, x.TaskCode = "Claude Code", snake(st), strings.ToUpper(x.TaskCode)
-	x.StartedAt, x.WaitingSince = tptr(started), tptr(waiting)
+	x.StartedAt, x.WaitingSince, x.EndedAt = tptr(started), tptr(waiting), tptr(ended)
+	// An interrupted or disconnected execution is not finished, but its work stopped when it entered that state.
+	if x.EndedAt == nil {
+		x.EndedAt = tptr(stopped)
+	}
 	if x.StartedAt != nil {
 		end := s.now()
-		if ended.Valid {
-			end = store.ParseTime(ended.String)
+		if x.EndedAt != nil {
+			end = *x.EndedAt
 		}
 		d := int(end.Sub(*x.StartedAt).Seconds())
 		x.DurationS = &d

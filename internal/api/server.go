@@ -61,6 +61,7 @@ func New(c *core.Service, port int, ui fs.FS, log *slog.Logger) *Server {
 	s.mux.HandleFunc("GET /{$}", s.serveUI)
 	s.mux.HandleFunc("GET /assets/", s.serveUI)
 	s.mux.HandleFunc("GET /favicon.svg", s.serveUI)
+	s.mux.HandleFunc("GET /licenses/", s.serveUI) // the licenses of the embedded fonts
 	return s
 }
 
@@ -265,12 +266,18 @@ func (s *Server) serveUI(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "The dashboard was not built into this binary. Build it with: make build\n")
 		return
 	}
-	if r.URL.Path == "/" {
+	// Only hashed asset names may be cached for a year.
+	if r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/licenses/") {
 		w.Header().Set("Cache-Control", "no-store")
 	} else {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	}
-	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+	font := strings.HasSuffix(r.URL.Path, ".woff2")
+	if font {
+		w.Header().Set("Content-Type", "font/woff2")
+	}
+	// A woff2 file is compressed already; compressing it again only costs time.
+	if !font && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		r.Header.Del("Range")
 		w.Header().Set("Vary", "Accept-Encoding")
 		gz := &gzipWriter{ResponseWriter: w}

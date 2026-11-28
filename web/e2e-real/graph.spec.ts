@@ -14,7 +14,10 @@ async function signIn(page: Page) {
 
 test('a harness that waits for the human is shown on the Overview and the Executions page', async ({ page }) => {
   await signIn(page);
-  await expect(page.getByRole('region', { name: 'Harnesses waiting for you' })).toBeVisible();
+  // v1.2.1: a waiting harness is a card under Live now, with Release on it.
+  const live = page.getByRole('region', { name: 'Live now' });
+  await expect(live.getByText('Waiting for instruction').first()).toBeVisible();
+  await expect(live.getByRole('button', { name: /^Release/ }).first()).toBeVisible();
   await page.goto('/#/executions');
   await expect(page.getByText('Waiting for instruction').first()).toBeVisible();
 });

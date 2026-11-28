@@ -218,6 +218,12 @@ type TaskSummary struct {
 	ExecutionID string   `json:"execution_id,omitempty"`
 }
 
+// PhaseTask is a task together with the phase it belongs to.
+type PhaseTask struct {
+	TaskSummary
+	PhaseID string `json:"phase_id" required:"true"`
+}
+
 type HarnessBrief struct {
 	Name             string `json:"name" required:"true"`
 	Version          string `json:"version,omitempty"`
@@ -260,9 +266,11 @@ type RequirementRef struct {
 
 type ProjectDetail struct {
 	Project
-	Phases           []PhaseRef        `json:"phases" required:"true"`
-	Tasks            []TaskSummary     `json:"tasks" required:"true"`
-	TasksPhase       string            `json:"tasks_phase,omitempty"`
+	Phases     []PhaseRef    `json:"phases" required:"true"`
+	Tasks      []TaskSummary `json:"tasks" required:"true"`
+	TasksPhase string        `json:"tasks_phase,omitempty"`
+	// PhaseTasks are the tasks of every phase in Phases, in order.
+	PhaseTasks       []PhaseTask       `json:"phase_tasks" required:"true"`
 	Harness          *HarnessBrief     `json:"harness,omitempty"`
 	PendingApprovals []ApprovalSummary `json:"pending_approval_items" required:"true"`
 	Requirements     []RequirementRef  `json:"requirements" required:"true"`
@@ -498,6 +506,8 @@ type ExecutionSummary struct {
 	StateDetail string     `json:"state_detail,omitempty"`
 	StartedAt   *time.Time `json:"started_at,omitempty"`
 	DurationS   *int       `json:"duration_s,omitempty"`
+	// EndedAt is when the execution stopped: finished, failed, cancelled, interrupted or disconnected. DurationS ends there.
+	EndedAt *time.Time `json:"ended_at,omitempty"`
 	// WaitingSince is set while the harness waits for the human (its turn ended). The state stays running.
 	WaitingSince *time.Time `json:"waiting_since,omitempty"`
 }

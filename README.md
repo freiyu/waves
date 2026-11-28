@@ -102,8 +102,8 @@ You need Waves installed and `waves setup` done once (see above). Then:
    tasks and the validator commands. **Read the validator commands: Waves will run them on your computer, as soon as the last task of a phase is done and before you review that phase, so they run on what Claude Code just wrote.** If the plan looks wrong, do
    not approve it; ask Claude Code to propose another. If it looks right, press **Submit**, then **Approve**, and type your
    passphrase.
-7. **Approve the start of phase 1.** The dashboard shows it under **Needs your decision**. Press the lock icon (approve) and
-   type your passphrase. Until you do, Claude Code cannot start.
+7. **Approve the start of phase 1.** The dashboard shows it under **Needs your decision**. Press **Approve** and type your
+   passphrase. Until you do, Claude Code cannot start.
 8. **Tell Claude Code to work.** In `claude` say:
 
    > Work through the Waves tasks of this project one after another. Claim a task, read its context, do the work, and submit the result. Then take the next one.
@@ -138,8 +138,8 @@ Everything else Claude Code does by itself, inside the project folder.
   connection to Claude Code, not a clock. The other side: a Claude Code that hangs but keeps its connection keeps its task,
   its workspace lock and its slot with no time limit, until you press **Release** on its execution.
 - **If Claude Code or the computer stops.** Waves never reruns work on its own. Open the **Executions** page: the task is
-  shown as **Blocked** and the execution as **Disconnected** or **Interrupted**. Choose **Retry**, **Accept partial result** or
-  **Mark failed**. Accepting a partial result needs only the operator token on your machine, not your passphrase; the task
+  shown as **Blocked** and the execution as **Disconnected** or **Interrupted**. Press **Retry**, or **Resolve** to choose
+  between **Retry the task**, **Accept partial result** and **Mark failed**. Accepting a partial result needs only the operator token on your machine, not your passphrase; the task
   becomes Done and the phase review marks it. Why it happened is in the **Activity** page.
 - **The passphrase protects you.** Choose one that you do not keep on this computer. Claude Code runs as you and can read any
   file you can read, so it must never be able to find the passphrase.
@@ -167,8 +167,8 @@ says what Waves enforces and what it does not.
 - **Needs your decision** on the dashboard Overview lists the approvals waiting for you. **Needs attention** on the
   Executions page lists interrupted, failed and waiting executions, each with its actions. An execution that shows
   **Waiting for instruction** is a Claude Code session that stopped and waits for your answer in its own terminal.
-- If an agent disconnects or Waves crashes, **nothing is rerun automatically**. Open the execution on the
-  Executions page and choose: Retry the task, Accept partial result, or Mark failed.
+- If an agent disconnects or Waves crashes, **nothing is rerun automatically**. On the Executions page press
+  **Retry**, or **Resolve** to choose: Retry the task, Accept partial result, or Mark failed.
   From a terminal: `waves execution cancel <id>`, then `waves task retry <task id> "<reason>"`.
 - Forgot the passphrase: stop the service and run `waves auth passphrase --reset` in a terminal.
 

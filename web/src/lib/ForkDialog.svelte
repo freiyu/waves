@@ -51,7 +51,7 @@
       {#if offered.length || project.fork_of}
         <div>
           <label class="lbl" for="fk-pick">Original project</label>
-          <select id="fk-pick" class="field min-h-10 w-full" bind:value={pick}>
+          <select id="fk-pick" class="field w-full" bind:value={pick}>
             <option value="">None, not a fork</option>
             {#each offered as o (o.id)}<option value={o.id}>{o.name}</option>{/each}
           </select>

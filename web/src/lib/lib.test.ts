@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ago, diffLines, duration } from './format';
 import { match } from './router.svelte';
 import { status, label } from './status';
+import { span, groupOf, inLastHour } from './timeline';
 
 describe('format', () => {
   it('formats durations and ages', () => {
@@ -96,5 +97,26 @@ describe('visible and the service agree on one list', () => {
   it('flags every example of the shared list and none of the safe ones', () => {
     for (const cp of fixture.unsafe) expect(visible(String.fromCodePoint(cp)), 'U+' + cp.toString(16)).toMatch(/^\\u\{[0-9A-F]{4,6}\}$/);
     for (const cp of fixture.safe) expect(visible(String.fromCodePoint(cp)), 'U+' + cp.toString(16)).toBe(String.fromCodePoint(cp));
+  });
+});
+
+describe('timeline', () => {
+  const now = Date.parse('2026-11-05T12:00:00Z');
+  const at = (min: number) => new Date(now - min * 60_000).toISOString();
+  it('places a bar from its start to its end or to now, clipped to the hour', () => {
+    expect(span({ started_at: at(30) }, now)).toEqual({ left: 50, width: 50 });
+    expect(span({ started_at: at(30), ended_at: at(15) }, now)).toEqual({ left: 50, width: 25 });
+    expect(span({ started_at: at(90), ended_at: at(45) }, now)).toEqual({ left: 0, width: 25 });
+    expect(span({ started_at: at(0) }, now)).toEqual({ left: 100, width: 0 });
+  });
+  it('leaves out what never started or ended before the hour', () => {
+    expect(span({}, now)).toBeNull();
+    expect(inLastHour({ started_at: at(120), ended_at: at(61) }, now)).toBe(false);
+    expect(inLastHour({ started_at: at(120) }, now)).toBe(true); // still running
+  });
+  it('groups a disconnected execution with the interrupted ones and a waiting one by itself', () => {
+    expect(groupOf({ state: 'disconnected' })).toBe('interrupted');
+    expect(groupOf({ state: 'starting' })).toBe('running');
+    expect(groupOf({ state: 'running', waiting_since: at(1) })).toBe('waiting');
   });
 });

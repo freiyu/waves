@@ -468,3 +468,30 @@ func TestMigration0005OnAPopulatedDatabase(t *testing.T) {
 		t.Fatal("a wait ended without saying how (or pointing at no execution)")
 	}
 }
+
+// A restore killed while it writes its audit record leaves the working copy's journal behind.
+// SQLite would treat it as belonging to the next copy and refuse to read that one.
+func TestRestoreAfterAnInterruptedRestore(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "waves.db")
+	db, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bak := filepath.Join(dir, "b.db")
+	if _, err := db.Backup(ctx, bak); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	left := path + ".restoring-journal"
+	if err := os.WriteFile(left, []byte("left by a killed restore"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Restore(ctx, bak, path); err != nil {
+		t.Fatalf("restore with a leftover journal: %v", err)
+	}
+	if _, err := os.Stat(left); !os.IsNotExist(err) {
+		t.Fatalf("the leftover journal is still there: %v", err)
+	}
+}

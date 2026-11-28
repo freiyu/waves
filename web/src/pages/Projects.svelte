@@ -106,7 +106,7 @@
       <div class="mb">
         <div><label class="lbl" for="reg-path">Folder path</label><input id="reg-path" class="field mono w-full" placeholder="~/work/my-project" bind:value={path} required /></div>
         <div><label class="lbl" for="reg-name">Name (optional)</label><input id="reg-name" class="field w-full" bind:value={name} /></div>
-        {#if projects.data?.items.length}<div><label class="lbl" for="reg-fork">Forked from (optional)</label><select id="reg-fork" class="field min-h-10 w-full" bind:value={forkOf}><option value="">None</option>{#each projects.data.items as o (o.id)}<option value={o.id}>{o.name}</option>{/each}</select></div>{/if}
+        {#if projects.data?.items.length}<div><label class="lbl" for="reg-fork">Forked from (optional)</label><select id="reg-fork" class="field w-full" bind:value={forkOf}><option value="">None</option>{#each projects.data.items as o (o.id)}<option value={o.id}>{o.name}</option>{/each}</select></div>{/if}
         <div class="muted">The folder is referenced in place. Waves never deletes it.</div>
         {#if error}<Note kind="dng" icon="fail" role="alert">{error}</Note>{/if}
       </div>

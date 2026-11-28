@@ -34,7 +34,7 @@
 <Dialog.Root bind:open>
   <Dialog.Portal>
     <Dialog.Overlay class="overlay fixed inset-0 z-40 bg-(--overlay)" />
-    <Dialog.Content aria-label="Command palette" aria-describedby={undefined} onCloseAutoFocus={(e) => e.preventDefault()} class="pop fixed top-[14vh] left-1/2 z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-xl border border-line bg-surface text-fg shadow-2xl">
+    <Dialog.Content aria-label="Command palette" aria-describedby={undefined} onCloseAutoFocus={(e) => e.preventDefault()} class="pop fixed top-[14vh] left-1/2 z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-[20px] border border-line bg-surface text-fg">
       <Command.Root loop>
         <div class="flex items-center gap-2 border-b border-line px-3">
           <Icon name="search" class="text-fg-muted" />
